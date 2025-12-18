@@ -1,3 +1,5 @@
+import { Phone } from "lucide-react";
+
 // Placement Statistics
 export const placementStats = {
   totalStudents: 120,
@@ -43,27 +45,29 @@ export const testimonials = [
 // Team Members
 export const teamMembers = {
   tpo: {
-    name: "Dr. Rajesh Verma",
+    name: "Dr. Mahendra Rane",
     designation: "Training & Placement Officer",
-    email: "tpo@abctech.edu.in",
-    phone: "+91 22 1234 5678",
+    email: "tpo@fcrit.ac.in",
+    phone: "+91 9819072834",
   },
   hod: {
-    name: "Dr. Sunita Deshmukh",
+    name: "Dr.M. Kiruthika",
     designation: "Head of Department - Computer Engineering",
-    email: "hod.comp@abctech.edu.in",
+    email: "m.kiruthika@fcrit.ac.in ",
     phone: "+91 22 1234 5679",
   },
   coordinators: [
     {
-      name: "Prof. Anil Mehta",
-      designation: "Placement Coordinator",
-      email: "anil.mehta@abctech.edu.in",
+      name: "Prof. Amar Murumkar",
+      designation: "Assistant Placement Officer",
+      email: "amar.murumkar@fcrit.ac.in",
+      phone: "+91 9970712736",
     },
     {
-      name: "Prof. Kavita Singh",
-      designation: "Internship Coordinator",
-      email: "kavita.singh@abctech.edu.in",
+      name: "Prof. Mritunjay Ojha",
+      designation: "Assistant Placement Officer",
+      email: "mritunjay.ojha@fcrit.ac.in",
+      phone: "+91 9987800789",
     },
   ],
 };

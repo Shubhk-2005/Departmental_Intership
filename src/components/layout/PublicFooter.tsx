@@ -12,9 +12,9 @@ const PublicFooter = () => {
                 <GraduationCap className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">ABC Institute of Technology</h3>
+                <h3 className="font-semibold text-lg text-white">Fr. Conceicao Rodrigues Institute of Technology</h3>
                 <p className="text-primary-foreground/70 text-sm">
-                  Established 1985
+                  Established 1994
                 </p>
               </div>
             </div>
@@ -27,32 +27,31 @@ const PublicFooter = () => {
 
           {/* Department Info */}
           <div>
-            <h4 className="font-semibold text-lg mb-4">Department of Computer Engineering</h4>
+            <h4 className="font-semibold text-lg mb-4 text-white">Department of Computer Engineering</h4>
             <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 mt-0.5 text-primary-foreground/70" />
                 <span className="text-primary-foreground/80">
-                  Main Campus, Block A, Room 301<br />
-                  Technology Avenue, City - 400001
+                  Father Agnel Technical Education Complex, near Noor Masjid, Juhu Nagar, Sector 9A, Vashi, Navi Mumbai, Maharashtra 400703
                 </span>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-primary-foreground/70" />
-                <span className="text-primary-foreground/80">+91 22 1234 5678</span>
+                <span className="text-primary-foreground/80">+91 9819072834</span>
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-primary-foreground/70" />
-                <span className="text-primary-foreground/80">tpo@abctech.edu.in</span>
+                <span className="text-primary-foreground/80">tpo@fcrit.ac.in</span>
               </li>
             </ul>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-semibold text-lg mb-4">Quick Links</h4>
+            <h4 className="font-semibold text-lg mb-4 text-white">Quick Links</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <a href="#" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
+                <a href="https://www.fcrit.ac.in" className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
                   College Website
                 </a>
               </li>
@@ -76,7 +75,7 @@ const PublicFooter = () => {
         </div>
 
         <div className="border-t border-primary-foreground/20 mt-8 pt-6 text-center text-sm text-primary-foreground/60">
-          <p>© 2024 ABC Institute of Technology. All rights reserved.</p>
+          <p>© 2026 Fr. Conceicao Rodrigues Institute of Technology. All rights reserved.</p>
           <p className="mt-1">Placement & Internship Information System - Computer Engineering Department</p>
         </div>
       </div>

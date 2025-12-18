@@ -27,7 +27,7 @@ const PublicHeader = () => {
                 Placement & Internship Portal
               </h1>
               <p className="text-primary-foreground/70 text-xs">
-                Computer Engineering Department
+                Computer Engineering Department,FCRIT.
               </p>
             </div>
             <span className="sm:hidden text-primary-foreground font-semibold">

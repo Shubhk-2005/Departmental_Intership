@@ -10,15 +10,22 @@ import {
   UserCircle,
   Users,
   Search,
+  Settings,
+  Shield,
+  Lock,
+  Eye,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 
 const AlumniDashboard = () => {
   const [activeTab, setActiveTab] = useState("profile");
   const [searchQuery, setSearchQuery] = useState("");
 
   const navItems = [
-    { path: "#profile", label: "My Profile", icon: <UserCircle className="h-4 w-4" /> },
-    { path: "#directory", label: "Alumni Directory", icon: <Users className="h-4 w-4" /> },
+    { value: "profile", label: "My Profile", icon: <UserCircle className="h-4 w-4" /> },
+    { value: "directory", label: "Alumni Directory", icon: <Users className="h-4 w-4" /> },
+    { value: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
   ];
 
   const filteredAlumni = alumniDirectory.filter(
@@ -31,10 +38,9 @@ const AlumniDashboard = () => {
   return (
     <DashboardLayout
       role="alumni"
-      navItems={navItems.map((item) => ({
-        ...item,
-        path: `/dashboard/alumni${item.path}`,
-      }))}
+      navItems={navItems}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
     >
       <div className="space-y-8">
         {/* Welcome Section */}
@@ -43,20 +49,6 @@ const AlumniDashboard = () => {
           <p className="text-muted-foreground">
             Update your profile and connect with fellow alumni
           </p>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap gap-2">
-          {["profile", "directory"].map((tab) => (
-            <Button
-              key={tab}
-              variant={activeTab === tab ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab === "profile" ? "My Profile" : "Alumni Directory"}
-            </Button>
-          ))}
         </div>
 
         {/* Profile Form */}
@@ -160,6 +152,54 @@ const AlumniDashboard = () => {
                 </p>
               </div>
             )}
+          </div>
+        )}
+        {/* Settings */}
+        {activeTab === "settings" && (
+          <div className="space-y-6 max-w-2xl">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground mb-1">Settings</h2>
+              <p className="text-sm text-muted-foreground">Manage privacy and account details</p>
+            </div>
+            
+            {/* Privacy Settings */}
+            <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+              <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Eye className="h-4 w-4" /> Privacy Controls
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Public Profile</p>
+                    <p className="text-sm text-muted-foreground">Allow students to view your profile</p>
+                  </div>
+                  <Switch defaultChecked onCheckedChange={(c) => toast.success(`Profile visibility ${c ? 'enabled' : 'disabled'}`)} />
+                </div>
+                 <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Show Contact Info</p>
+                    <p className="text-sm text-muted-foreground">Display email on directory listing</p>
+                  </div>
+                  <Switch onCheckedChange={(c) => toast.success(`Contact info ${c ? 'visible' : 'hidden'}`)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Account Security */}
+             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+              <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Lock className="h-4 w-4" /> Security
+              </h3>
+               <div className="space-y-4">
+                  <div className="space-y-2">
+                  <Label htmlFor="alumni-pass">Change Password</Label>
+                  <Input id="alumni-pass" type="password" placeholder="New Password" />
+                </div>
+                 <Button onClick={() => toast.success("Password updated")}>
+                  Update Password
+                </Button>
+               </div>
+             </div>
           </div>
         )}
       </div>
