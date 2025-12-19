@@ -124,6 +124,9 @@ export const alumniDirectory = [
   },
 ];
 
+// Internship statuses
+export const internshipStatuses = ["Pending", "Ongoing", "Completed"];
+
 // Internship Data
 export const internships = [
   {
@@ -135,6 +138,8 @@ export const internships = [
     domain: "Web Development",
     duration: "3 months",
     status: "Completed",
+    category: "Internship",
+    type: "On-campus",
   },
   {
     id: 2,
@@ -145,6 +150,8 @@ export const internships = [
     domain: "Data Science",
     duration: "6 months",
     status: "Ongoing",
+    category: "Internship",
+    type: "Off-campus",
   },
   {
     id: 3,
@@ -155,6 +162,8 @@ export const internships = [
     domain: "Machine Learning",
     duration: "4 months",
     status: "Completed",
+    category: "Internship",
+    type: "On-campus",
   },
   {
     id: 4,
@@ -165,6 +174,8 @@ export const internships = [
     domain: "Cloud Computing",
     duration: "3 months",
     status: "Pending",
+    category: "Internship",
+    type: "Off-campus",
   },
   {
     id: 5,
@@ -175,6 +186,8 @@ export const internships = [
     domain: "Backend Development",
     duration: "6 months",
     status: "Ongoing",
+    category: "Placement",
+    type: "On-campus",
   },
 ];
 
@@ -249,5 +262,3 @@ export const domains = [
   "Cybersecurity",
 ];
 
-// Internship statuses
-export const internshipStatuses = ["Pending", "Ongoing", "Completed"];

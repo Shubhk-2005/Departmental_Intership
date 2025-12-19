@@ -60,8 +60,8 @@ const StudentDashboard = () => {
 
   const navItems = [
     { value: "overview", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-    { value: "add-internship", label: "Add Internship", icon: <PlusCircle className="h-4 w-4" /> },
-    { value: "view-internships", label: "My Internships", icon: <Briefcase className="h-4 w-4" /> },
+    { value: "add-internship", label: "Add Opportunity", icon: <PlusCircle className="h-4 w-4" /> },
+    { value: "view-internships", label: "My Opportunities", icon: <List className="h-4 w-4" /> },
     { value: "statistics", label: "Placement Stats", icon: <BarChart3 className="h-4 w-4" /> },
     { value: "alumni", label: "Alumni Directory", icon: <GraduationCap className="h-4 w-4" /> },
     { value: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
@@ -192,10 +192,34 @@ const StudentDashboard = () => {
         {activeTab === "add-internship" && (
           <div className="form-section max-w-2xl">
             <h2 className="text-xl font-semibold text-foreground mb-6">
-              Add New Internship
+              Add New Opportunity
             </h2>
             <form className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Internship">Internship</SelectItem>
+                      <SelectItem value="Placement">Placement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="type">Type</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="On-campus">On-campus</SelectItem>
+                      <SelectItem value="Off-campus">Off-campus</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="company">Company Name</Label>
                   <Input id="company" placeholder="e.g., TCS, Infosys" />
@@ -220,7 +244,7 @@ const StudentDashboard = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Duration</Label>
+                  <Label htmlFor="duration">Duration (if applicable)</Label>
                   <Input id="duration" placeholder="e.g., 3 months" />
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -240,7 +264,7 @@ const StudentDashboard = () => {
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button type="submit">Submit Internship</Button>
+                <Button type="submit">Submit Details</Button>
                 <Button type="button" variant="outline">
                   Clear Form
                 </Button>
@@ -253,7 +277,7 @@ const StudentDashboard = () => {
         {activeTab === "view-internships" && (
           <div className="form-section">
             <h2 className="text-xl font-semibold text-foreground mb-6">
-              My Internships
+              My Opportunities
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -266,10 +290,10 @@ const StudentDashboard = () => {
                       Role
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Domain
+                      Category
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Duration
+                      Type
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-foreground">
                       Status
@@ -277,7 +301,7 @@ const StudentDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {internships.slice(0, 3).map((intern) => (
+                  {internships.slice(0, 5).map((intern) => (
                     <tr
                       key={intern.id}
                       className="border-b border-border last:border-0"
@@ -287,10 +311,12 @@ const StudentDashboard = () => {
                         {intern.role}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
-                        {intern.domain}
+                        {(intern as any).category || 'Internship'}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
-                        {intern.duration}
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${(intern as any).type === 'On-campus' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                           {(intern as any).type || 'Off-campus'}
+                        </span>
                       </td>
                       <td className="py-3 px-4">
                         <span
