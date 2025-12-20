@@ -53,10 +53,149 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  PieChart,
   Pie,
   Cell,
 } from "recharts";
+import { useTestimonials } from "@/hooks/useTestimonials";
+import { MessageSquare, Trash2 } from "lucide-react";
+
+// Moved TestimonialsTab definition before AdminDashboard to avoid "used before declaration"
+const TestimonialsTab = () => {
+  const { testimonials, addTestimonial, deleteTestimonial } = useTestimonials();
+  const [formData, setFormData] = useState({
+    name: "",
+    role: "",
+    company: "",
+    batch: "",
+    testimonial: "",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.testimonial) return;
+    addTestimonial(formData);
+    setFormData({ name: "", role: "", company: "", batch: "", testimonial: "" });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold text-foreground">Manage Testimonials</h2>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Add Testimonial Form */}
+        <div className="bg-card rounded-lg border border-border p-6 shadow-sm h-fit">
+          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add Testimonial
+          </h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="t-name">Name</Label>
+              <Input
+                id="t-name"
+                placeholder="Student Name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="t-role">Role</Label>
+                <Input
+                  id="t-role"
+                  placeholder="e.g. SDE"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="t-company">Company</Label>
+                <Input
+                  id="t-company"
+                  placeholder="e.g. Google"
+                  value={formData.company}
+                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="t-batch">Batch</Label>
+              <Input
+                id="t-batch"
+                placeholder="e.g. 2024"
+                value={formData.batch}
+                onChange={(e) => setFormData({ ...formData, batch: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="t-message">Testimonial</Label>
+              <Input
+                id="t-message"
+                placeholder="Share the experience..."
+                className="min-h-[100px]"
+                // as="textarea"
+                value={formData.testimonial}
+                onChange={(e) => setFormData({ ...formData, testimonial: e.target.value })}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Add Testimonial
+            </Button>
+          </form>
+        </div>
+
+        {/* Testimonials List */}
+        <div className="lg:col-span-2 space-y-4">
+          <h3 className="font-semibold text-foreground mb-4">
+            Current Testimonials ({testimonials.length})
+          </h3>
+          <div className="grid gap-4">
+            {testimonials.map((t) => (
+              <div
+                key={t.id}
+                className="bg-card rounded-lg border border-border p-4 shadow-sm flex justify-between items-start gap-4"
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold text-foreground">{t.name}</h4>
+                    <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded-full">
+                      {t.batch}
+                    </span>
+                  </div>
+                  <p className="text-sm text-primary mb-2">
+                    {t.role} @ {t.company}
+                  </p>
+                  <p className="text-sm text-muted-foreground italic">
+                    "{t.testimonial}"
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                  onClick={() => deleteTestimonial(t.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {testimonials.length === 0 && (
+              <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+                No testimonials added yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -68,6 +207,7 @@ const AdminDashboard = () => {
     { value: "overview", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
     { value: "analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" /> },
     { value: "internships", label: "Internships", icon: <List className="h-4 w-4" /> },
+    { value: "testimonials", label: "Testimonials", icon: <MessageSquare className="h-4 w-4" /> },
     { value: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
   ];
 
@@ -449,6 +589,12 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Testimonials */}
+        {activeTab === "testimonials" && (
+          <TestimonialsTab />
+        )}
+
         {/* Settings */}
         {activeTab === "settings" && (
           <div className="space-y-6 max-w-2xl">
@@ -502,6 +648,5 @@ const AdminDashboard = () => {
     </DashboardLayout>
   );
 };
-
 
 export default AdminDashboard;

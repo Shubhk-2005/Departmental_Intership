@@ -3,10 +3,12 @@ import PublicFooter from "@/components/layout/PublicFooter";
 import StatCard from "@/components/cards/StatCard";
 import TestimonialCard from "@/components/cards/TestimonialCard";
 import TeamMemberCard from "@/components/cards/TeamMemberCard";
-import { placementStats, testimonials, teamMembers } from "@/data/dummyData";
+import { placementStats, teamMembers } from "@/data/dummyData";
 import { Users, TrendingUp, IndianRupee, Building2, Briefcase, Award } from "lucide-react";
+import { useTestimonials } from "@/hooks/useTestimonials";
 
 const Index = () => {
+    const { testimonials } = useTestimonials();
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <PublicHeader />
