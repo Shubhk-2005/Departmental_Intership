@@ -57,6 +57,7 @@ import { Switch } from "@/components/ui/switch";
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showForm, setShowForm] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
 
   const navItems = [
     { value: "overview", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -249,7 +250,7 @@ const StudentDashboard = () => {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select>
+                  <Select onValueChange={setSelectedStatus}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
@@ -262,6 +263,19 @@ const StudentDashboard = () => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {(selectedStatus === "Ongoing" || selectedStatus === "Completed") && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="startDate">Start Date</Label>
+                      <Input id="startDate" type="date" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="endDate">End Date</Label>
+                      <Input id="endDate" type="date" />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button type="submit">Submit Details</Button>
