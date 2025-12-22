@@ -38,7 +38,7 @@ const DashboardLayout = ({
         <div className="flex flex-col h-full">
           {/* Sidebar Header */}
           <div className="p-4 border-b border-sidebar-border">
-            <Link to="/" className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <div className="bg-sidebar-accent p-2 rounded-lg">
                 <GraduationCap className="h-5 w-5 text-sidebar-foreground" />
               </div>
@@ -50,7 +50,7 @@ const DashboardLayout = ({
                   {roleLabels[role]}
                 </p>
               </div>
-            </Link>
+            </div>
           </div>
 
           {/* Navigation */}
