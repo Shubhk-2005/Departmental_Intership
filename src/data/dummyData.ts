@@ -58,10 +58,10 @@ export const teamMembers = {
   },
   coordinators: [
     {
-      name: "Prof. Amar Murumkar",
+      name: "Prof. Prachi Verma",
       designation: "Assistant Placement Officer",
-      email: "amar.murumkar@fcrit.ac.in",
-      phone: "+91 9970712736",
+      email: "prachi.verma@fcrit.ac.in",
+      phone: "+91 8839560208",
     },
     {
       name: "Prof. Mritunjay Ojha",
