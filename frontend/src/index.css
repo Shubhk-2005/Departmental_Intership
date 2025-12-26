@@ -1,0 +1,221 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Navy Academic Color Palette */
+    --background: 210 20% 98%;
+    --foreground: 220 40% 13%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 40% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 40% 13%;
+
+    /* Deep Navy Primary */
+    --primary: 220 60% 20%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Muted Blue Secondary */
+    --secondary: 214 20% 94%;
+    --secondary-foreground: 220 40% 20%;
+
+    --muted: 214 20% 96%;
+    --muted-foreground: 220 15% 45%;
+
+    /* Slate Accent */
+    --accent: 215 25% 90%;
+    --accent-foreground: 220 40% 20%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 220 60% 30%;
+
+    --radius: 0.5rem;
+
+    /* Custom tokens */
+    --navy-50: 214 40% 96%;
+    --navy-100: 214 35% 91%;
+    --navy-200: 215 30% 82%;
+    --navy-300: 215 25% 65%;
+    --navy-400: 218 25% 50%;
+    --navy-500: 220 30% 40%;
+    --navy-600: 220 40% 30%;
+    --navy-700: 220 50% 22%;
+    --navy-800: 220 60% 18%;
+    --navy-900: 220 65% 12%;
+
+    --success: 142 72% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Sidebar */
+    --sidebar-background: 220 60% 18%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 210 40% 98%;
+    --sidebar-primary-foreground: 220 60% 18%;
+    --sidebar-accent: 220 50% 25%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 220 45% 25%;
+    --sidebar-ring: 215 80% 60%;
+  }
+
+  .dark {
+    --background: 220 60% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 50% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 50% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 215 80% 60%;
+    --primary-foreground: 220 60% 10%;
+
+    --secondary: 220 40% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 30% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 220 35% 22%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 30% 20%;
+    --input: 220 30% 20%;
+    --ring: 215 80% 60%;
+
+    --sidebar-background: 220 60% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 215 80% 60%;
+    --sidebar-primary-foreground: 220 60% 10%;
+    --sidebar-accent: 220 40% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 220 30% 18%;
+    --sidebar-ring: 215 80% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold tracking-tight text-foreground;
+  }
+}
+
+@layer components {
+  .section-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-narrow {
+    @apply max-w-7xl mx-auto;
+  }
+
+  .stat-card {
+    @apply bg-card rounded-lg border border-border p-6 shadow-sm transition-shadow hover:shadow-md;
+  }
+
+  .form-section {
+    @apply bg-card rounded-lg border border-border p-6 shadow-sm;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Animations */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes float {
+    0% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+    100% {
+      transform: translateY(0px);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out forwards;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out forwards;
+  }
+
+  .glass-card {
+    @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-white/20 dark:border-slate-700/30 shadow-xl;
+  }
+}
