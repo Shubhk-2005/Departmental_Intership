@@ -36,11 +36,13 @@ import {
   Bell,
   Lock,
   Shield,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea"; // Assuming Textarea component exists, if not I will use Input or check imports
 import {
   BarChart,
   Bar,
@@ -56,6 +58,174 @@ import {
 } from "recharts";
 import { useTestimonials } from "@/hooks/useTestimonials";
 import { MessageSquare, Trash2 } from "lucide-react";
+
+// Drives Tab Component
+const DrivesTab = () => {
+  const [drives, setDrives] = useState([
+    {
+      id: 1,
+      company: "Google",
+      role: "Software Engineer",
+      date: "2024-02-15",
+      description: "Open for all branches. CGPA > 8.0",
+    },
+    {
+      id: 2,
+      company: "Microsoft",
+      role: "Data Scientist",
+      date: "2024-02-20",
+      description: "Data Structures and Algorithms test required.",
+    },
+  ]);
+
+  const [formData, setFormData] = useState({
+    company: "",
+    role: "",
+    date: "",
+    description: "",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.company || !formData.role || !formData.date) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const newDrive = {
+      id: Date.now(),
+      ...formData,
+    };
+
+    setDrives([newDrive, ...drives]);
+    setFormData({
+      company: "",
+      role: "",
+      date: "",
+      description: "",
+    });
+    toast.success("New drive added successfully");
+  };
+
+  const handleDelete = (id: number) => {
+    setDrives(drives.filter((d) => d.id !== id));
+    toast.success("Drive removed");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold text-foreground">
+          Manage Upcoming Drives
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Add Drive Form */}
+        <div className="bg-card rounded-lg border border-border p-6 shadow-sm h-fit">
+          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add New Drive
+          </h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="d-company">Company Name</Label>
+              <Input
+                id="d-company"
+                placeholder="e.g. Amazon"
+                value={formData.company}
+                onChange={(e) =>
+                  setFormData({ ...formData, company: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="d-role">Role</Label>
+              <Input
+                id="d-role"
+                placeholder="e.g. SDE I"
+                value={formData.role}
+                onChange={(e) =>
+                  setFormData({ ...formData, role: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="d-date">Date</Label>
+              <Input
+                id="d-date"
+                type="date"
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData({ ...formData, date: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="d-desc">Description / Eligibility</Label>
+              <Input
+                id="d-desc"
+                placeholder="Criteria, rounds etc."
+                 value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Publish Drive
+            </Button>
+          </form>
+        </div>
+
+        {/* Drives List */}
+        <div className="lg:col-span-2 space-y-4">
+          <h3 className="font-semibold text-foreground mb-4">
+            Upcoming Drives ({drives.length})
+          </h3>
+          <div className="grid gap-4">
+            {drives.map((drive) => (
+              <div
+                key={drive.id}
+                className="bg-card rounded-lg border border-border p-4 shadow-sm flex justify-between items-start gap-4"
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold text-foreground">
+                      {drive.company}
+                    </h4>
+                    <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded-full flex items-center gap-1">
+                       <Calendar className="h-3 w-3" /> {drive.date}
+                    </span>
+                  </div>
+                  <p className="text-sm text-primary mb-1">{drive.role}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {drive.description}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                  onClick={() => handleDelete(drive.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {drives.length === 0 && (
+              <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+                No upcoming drives scheduled.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Moved TestimonialsTab definition before AdminDashboard to avoid "used before declaration"
 const TestimonialsTab = () => {
@@ -216,7 +386,6 @@ const TestimonialsTab = () => {
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedYear, setSelectedYear] = useState("All Years");
-  const [selectedCompany, setSelectedCompany] = useState("All Companies");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
 
   const navItems = [
@@ -236,6 +405,11 @@ const AdminDashboard = () => {
       icon: <List className="h-4 w-4" />,
     },
     {
+      value: "drives",
+      label: "Drives",
+      icon: <Calendar className="h-4 w-4" />,
+    },
+    {
       value: "testimonials",
       label: "Testimonials",
       icon: <MessageSquare className="h-4 w-4" />,
@@ -253,7 +427,6 @@ const AdminDashboard = () => {
   const getFilteredStats = () => {
     let multiplier = 1;
     if (selectedYear !== "All Years") multiplier *= 0.85;
-    if (selectedCompany !== "All Companies") multiplier *= 0.15;
     if (selectedStatus === "Placed") multiplier *= 0.9;
     if (selectedStatus === "Unplaced") multiplier *= 0.1;
 
@@ -428,28 +601,12 @@ const AdminDashboard = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select
-                  value={selectedCompany}
-                  onValueChange={setSelectedCompany}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Company" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {companies.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <Button
                   variant="ghost"
                   size="icon"
                   title="Reset Filters"
                   onClick={() => {
                     setSelectedYear("All Years");
-                    setSelectedCompany("All Companies");
                     setSelectedStatus("All Status");
                   }}
                 >
@@ -708,6 +865,9 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Drives Tab */}
+        {activeTab === "drives" && <DrivesTab />}
 
         {/* Testimonials */}
         {activeTab === "testimonials" && <TestimonialsTab />}

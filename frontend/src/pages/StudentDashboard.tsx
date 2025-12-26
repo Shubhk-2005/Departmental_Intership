@@ -16,11 +16,11 @@ import {
   placementStats,
   internships,
   alumniDirectory,
-  companies,
   domains,
   internshipStatuses,
   companyWisePlacements,
   yearWiseTrends,
+  academicYears,
 } from "@/data/dummyData";
 import {
   BarChart,
@@ -42,6 +42,7 @@ import {
   TrendingUp,
   Award,
   Building2,
+  Filter,
   Search,
   Shield,
   Bell,
@@ -60,6 +61,25 @@ const StudentDashboard = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  
+  // Placement Stats Filter State
+  const [selectedYear, setSelectedYear] = useState("All Years");
+
+  // Simulate filter effect by adjusting stats (mirroring Admin Dashboard)
+  const getFilteredStats = () => {
+    let multiplier = 1;
+    if (selectedYear !== "All Years") multiplier *= 0.85;
+
+    return {
+      placed: Math.round(placementStats.placedStudents * multiplier),
+      total: Math.round(placementStats.totalStudents * multiplier) || 1,
+      percentage: Math.round(
+        placementStats.placementPercentage * (multiplier > 0.5 ? 1 : 0.8)
+      ),
+    };
+  };
+
+  const filteredStats = getFilteredStats();
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -74,12 +94,36 @@ const StudentDashboard = () => {
   };
 
   const navItems = [
-    { value: "overview", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-    { value: "add-internship", label: "Add Opportunity", icon: <PlusCircle className="h-4 w-4" /> },
-    { value: "view-internships", label: "My Opportunities", icon: <List className="h-4 w-4" /> },
-    { value: "statistics", label: "Placement Stats", icon: <BarChart3 className="h-4 w-4" /> },
-    { value: "alumni", label: "Alumni Directory", icon: <GraduationCap className="h-4 w-4" /> },
-    { value: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
+    {
+      value: "overview",
+      label: "Dashboard",
+      icon: <LayoutDashboard className="h-4 w-4" />,
+    },
+    {
+      value: "add-internship",
+      label: "Add Opportunity",
+      icon: <PlusCircle className="h-4 w-4" />,
+    },
+    {
+      value: "view-internships",
+      label: "My Opportunities",
+      icon: <List className="h-4 w-4" />,
+    },
+    {
+      value: "statistics",
+      label: "Placement Stats",
+      icon: <BarChart3 className="h-4 w-4" />,
+    },
+    {
+      value: "alumni",
+      label: "Alumni Directory",
+      icon: <GraduationCap className="h-4 w-4" />,
+    },
+    {
+      value: "settings",
+      label: "Settings",
+      icon: <Settings className="h-4 w-4" />,
+    },
   ];
 
   return (
@@ -92,7 +136,9 @@ const StudentDashboard = () => {
       <div className="space-y-8">
         {/* Welcome Section */}
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Welcome, Student</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            Welcome, Student
+          </h1>
           <p className="text-muted-foreground">
             Manage your internships and view placement statistics
           </p>
@@ -107,15 +153,27 @@ const StudentDashboard = () => {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border">
                     {profileImage ? (
-                      <img src={profileImage} alt="Profile" className="h-full w-full object-cover" />
+                      <img
+                        src={profileImage}
+                        alt="Profile"
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
-                      <span className="text-2xl font-bold text-primary">AM</span>
+                      <span className="text-2xl font-bold text-primary">
+                        AM
+                      </span>
                     )}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg text-foreground">Arjun Malhotra</h3>
-                    <p className="text-sm text-muted-foreground">Roll No: CE2024001</p>
-                    <p className="text-sm text-muted-foreground">Computer Engineering</p>
+                    <h3 className="font-semibold text-lg text-foreground">
+                      Arjun Malhotra
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Roll No: CE2024001
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Computer Engineering
+                    </p>
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -128,12 +186,16 @@ const StudentDashboard = () => {
                     <span className="font-medium text-foreground">2024</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">Status</span>
+                    <span className="text-sm text-muted-foreground">
+                      Status
+                    </span>
                     <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-success/10 text-success">
                       Placed
                     </span>
                   </div>
-                  <Button className="w-full mt-2" variant="outline">View Full Profile</Button>
+                  <Button className="w-full mt-2" variant="outline">
+                    View Full Profile
+                  </Button>
                 </div>
               </div>
 
@@ -142,8 +204,12 @@ const StudentDashboard = () => {
                 {/* Quick Stats Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
-                    <p className="text-sm text-muted-foreground">Applications</p>
-                    <p className="text-2xl font-bold text-foreground mt-1">12</p>
+                    <p className="text-sm text-muted-foreground">
+                      Applications
+                    </p>
+                    <p className="text-2xl font-bold text-foreground mt-1">
+                      12
+                    </p>
                   </div>
                   <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
                     <p className="text-sm text-muted-foreground">Interviews</p>
@@ -160,18 +226,31 @@ const StudentDashboard = () => {
                   {/* Notifications */}
                   <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
                     <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                       Recent Notifications
+                      Recent Notifications
                     </h3>
                     <div className="space-y-4">
                       {[
-                        { title: "TCS Interview Scheduled", time: "2 hours ago" },
-                        { title: "New Drive: Infosys Added", time: "1 day ago" },
+                        {
+                          title: "TCS Interview Scheduled",
+                          time: "2 hours ago",
+                        },
+                        {
+                          title: "New Drive: Infosys Added",
+                          time: "1 day ago",
+                        },
                         { title: "Resume Verified", time: "2 days ago" },
                       ].map((note, i) => (
-                        <div key={i} className="flex justify-between items-start pb-3 border-b border-border last:border-0 last:pb-0">
+                        <div
+                          key={i}
+                          className="flex justify-between items-start pb-3 border-b border-border last:border-0 last:pb-0"
+                        >
                           <div>
-                            <p className="text-sm font-medium text-foreground">{note.title}</p>
-                            <p className="text-xs text-muted-foreground">{note.time}</p>
+                            <p className="text-sm font-medium text-foreground">
+                              {note.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {note.time}
+                            </p>
                           </div>
                         </div>
                       ))}
@@ -180,17 +259,38 @@ const StudentDashboard = () => {
 
                   {/* Upcoming Drives */}
                   <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                    <h3 className="font-semibold text-foreground mb-4">Upcoming Drives</h3>
+                    <h3 className="font-semibold text-foreground mb-4">
+                      Upcoming Drives
+                    </h3>
                     <div className="space-y-4">
                       {[
-                        { company: "Accenture", date: "20 Dec 2024", role: "Software Engineer" },
-                        { company: "Capgemini", date: "22 Dec 2024", role: "Analyst" },
-                        { company: "Jio", date: "25 Dec 2024", role: "Graduate Trainee" },
+                        {
+                          company: "Accenture",
+                          date: "20 Dec 2024",
+                          role: "Software Engineer",
+                        },
+                        {
+                          company: "Capgemini",
+                          date: "22 Dec 2024",
+                          role: "Analyst",
+                        },
+                        {
+                          company: "Jio",
+                          date: "25 Dec 2024",
+                          role: "Graduate Trainee",
+                        },
                       ].map((drive, i) => (
-                        <div key={i} className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0">
+                        <div
+                          key={i}
+                          className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0"
+                        >
                           <div>
-                            <p className="text-sm font-medium text-foreground">{drive.company}</p>
-                            <p className="text-xs text-muted-foreground">{drive.role}</p>
+                            <p className="text-sm font-medium text-foreground">
+                              {drive.company}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {drive.role}
+                            </p>
                           </div>
                           <div className="text-right">
                             <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
@@ -282,7 +382,8 @@ const StudentDashboard = () => {
                   </Select>
                 </div>
 
-                {(selectedStatus === "Ongoing" || selectedStatus === "Completed") && (
+                {(selectedStatus === "Ongoing" ||
+                  selectedStatus === "Completed") && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="startDate">Start Date</Label>
@@ -338,16 +439,24 @@ const StudentDashboard = () => {
                       key={intern.id}
                       className="border-b border-border last:border-0"
                     >
-                      <td className="py-3 px-4 text-foreground">{intern.company}</td>
+                      <td className="py-3 px-4 text-foreground">
+                        {intern.company}
+                      </td>
                       <td className="py-3 px-4 text-muted-foreground">
                         {intern.role}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
-                        {(intern as any).category || 'Internship'}
+                        {(intern as any).category || "Internship"}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${(intern as any).type === 'On-campus' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                           {(intern as any).type || 'Off-campus'}
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            (intern as any).type === "On-campus"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-purple-100 text-purple-700"
+                          }`}
+                        >
+                          {(intern as any).type || "Off-campus"}
                         </span>
                       </td>
                       <td className="py-3 px-4">
@@ -371,15 +480,44 @@ const StudentDashboard = () => {
           </div>
         )}
 
-
         {/* Statistics */}
         {activeTab === "statistics" && (
           <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border border-border">
+                <h2 className="text-xl font-semibold text-foreground">
+                  Placement Statistics
+                </h2>
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {academicYears.map((year) => (
+                                <SelectItem key={year} value={year}>
+                                    {year}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Reset Filters"
+                        onClick={() => {
+                            setSelectedYear("All Years");
+                        }}
+                    >
+                        <Filter className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <StatCard
                 title="Total Placed"
-                value={placementStats.placedStudents}
-                subtitle={`${placementStats.placementPercentage}% placement rate`}
+                value={filteredStats.placed}
+                subtitle={`${filteredStats.percentage}% placement rate`}
                 icon={<Users className="h-6 w-6" />}
               />
               <StatCard
@@ -399,24 +537,41 @@ const StudentDashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Company Chart */}
               <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                <h3 className="font-semibold text-foreground mb-4">Top Recruiters</h3>
+                <h3 className="font-semibold text-foreground mb-4">
+                  Top Recruiters
+                </h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={companyWisePlacements}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="company" 
-                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="hsl(var(--border))"
                       />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                      <Tooltip 
+                      <XAxis
+                        dataKey="company"
+                        tick={{
+                          fill: "hsl(var(--muted-foreground))",
+                          fontSize: 12,
+                        }}
+                      />
+                      <YAxis
+                        tick={{
+                          fill: "hsl(var(--muted-foreground))",
+                          fontSize: 12,
+                        }}
+                      />
+                      <Tooltip
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
                           border: "1px solid hsl(var(--border))",
                           borderRadius: "8px",
                         }}
                       />
-                      <Bar dataKey="placements" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Bar
+                        dataKey="placements"
+                        fill="hsl(var(--primary))"
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -424,27 +579,40 @@ const StudentDashboard = () => {
 
               {/* Trend Chart */}
               <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                <h3 className="font-semibold text-foreground mb-4">Placement Trends</h3>
+                <h3 className="font-semibold text-foreground mb-4">
+                  Placement Trends
+                </h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={yearWiseTrends}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="year" 
-                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="hsl(var(--border))"
                       />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                      <Tooltip 
+                      <XAxis
+                        dataKey="year"
+                        tick={{
+                          fill: "hsl(var(--muted-foreground))",
+                          fontSize: 12,
+                        }}
+                      />
+                      <YAxis
+                        tick={{
+                          fill: "hsl(var(--muted-foreground))",
+                          fontSize: 12,
+                        }}
+                      />
+                      <Tooltip
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
                           border: "1px solid hsl(var(--border))",
                           borderRadius: "8px",
                         }}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="placed" 
-                        stroke="hsl(var(--primary))" 
+                      <Line
+                        type="monotone"
+                        dataKey="placed"
+                        stroke="hsl(var(--primary))"
                         strokeWidth={2}
                         dot={{ fill: "hsl(var(--primary))" }}
                       />
@@ -480,32 +648,46 @@ const StudentDashboard = () => {
         {activeTab === "settings" && (
           <div className="space-y-6 max-w-2xl">
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">Settings</h2>
-              <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                Settings
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Manage your account and preferences
+              </p>
             </div>
-            
+
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <UserCircle className="h-4 w-4" /> Profile Picture
               </h3>
               <div className="flex items-center gap-6">
                 <div className="h-20 w-20 rounded-full bg-secondary/20 flex items-center justify-center overflow-hidden border-2 border-border">
-                   {profileImage ? (
-                      <img src={profileImage} alt="Profile Preview" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-2xl font-bold text-muted-foreground">AM</span>
-                    )}
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt="Profile Preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-2xl font-bold text-muted-foreground">
+                      AM
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="profile-upload" className="block">Change Profile Photo</Label>
-                  <Input 
-                    id="profile-upload" 
-                    type="file" 
+                  <Label htmlFor="profile-upload" className="block">
+                    Change Profile Photo
+                  </Label>
+                  <Input
+                    id="profile-upload"
+                    type="file"
                     accept="image/*"
                     onChange={handleImageUpload}
                     className="max-w-xs"
                   />
-                  <p className="text-xs text-muted-foreground">Recommended: Square JPG, PNG. Max 2MB.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Recommended: Square JPG, PNG. Max 2MB.
+                  </p>
                 </div>
               </div>
             </div>
@@ -527,7 +709,9 @@ const StudentDashboard = () => {
                   <Label htmlFor="confirm-pass">Confirm New Password</Label>
                   <Input id="confirm-pass" type="password" />
                 </div>
-                <Button onClick={() => toast.success("Password updated successfully")}>
+                <Button
+                  onClick={() => toast.success("Password updated successfully")}
+                >
                   Update Password
                 </Button>
               </div>
@@ -540,23 +724,44 @@ const StudentDashboard = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Email Notifications</p>
-                    <p className="text-sm text-muted-foreground">Receive updates via email</p>
+                    <p className="font-medium text-foreground">
+                      Email Notifications
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Receive updates via email
+                    </p>
                   </div>
-                  <Switch defaultChecked onCheckedChange={(c) => toast.success(`Email notifications ${c ? 'enabled' : 'disabled'}`)} />
+                  <Switch
+                    defaultChecked
+                    onCheckedChange={(c) =>
+                      toast.success(
+                        `Email notifications ${c ? "enabled" : "disabled"}`
+                      )
+                    }
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Push Notifications</p>
-                    <p className="text-sm text-muted-foreground">Receive browser notifications</p>
+                    <p className="font-medium text-foreground">
+                      Push Notifications
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Receive browser notifications
+                    </p>
                   </div>
-                  <Switch defaultChecked onCheckedChange={(c) => toast.success(`Push notifications ${c ? 'enabled' : 'disabled'}`)} />
+                  <Switch
+                    defaultChecked
+                    onCheckedChange={(c) =>
+                      toast.success(
+                        `Push notifications ${c ? "enabled" : "disabled"}`
+                      )
+                    }
+                  />
                 </div>
               </div>
             </div>
           </div>
         )}
-
       </div>
     </DashboardLayout>
   );
