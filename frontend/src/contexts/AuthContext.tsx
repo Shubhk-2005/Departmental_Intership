@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from "react";
 import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -22,24 +21,26 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<string | null | undefined>(undefined);
+  const [userRole, setUserRole] = useState<string | null | undefined>(
+    undefined
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
-      
+
       if (user) {
         // Reset role to undefined while fetching to prevent premature redirects
         setUserRole(undefined);
-         
+
         // Fetch user role from Firestore
         try {
           const userDoc = await getDoc(doc(db, "Users", user.uid));
           if (userDoc.exists()) {
             setUserRole(userDoc.data().role);
           } else {
-             setUserRole(null);
+            setUserRole(null);
           }
         } catch (error) {
           console.error("Error fetching user role:", error);
@@ -48,7 +49,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setUserRole(null);
       }
-      
+
       setLoading(false);
     });
 
@@ -62,7 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ user, userRole, loading, logout }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };
