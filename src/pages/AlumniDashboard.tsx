@@ -21,11 +21,36 @@ import { toast } from "sonner";
 const AlumniDashboard = () => {
   const [activeTab, setActiveTab] = useState("profile");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isHigherStudies, setIsHigherStudies] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const navItems = [
-    { value: "profile", label: "My Profile", icon: <UserCircle className="h-4 w-4" /> },
-    { value: "directory", label: "Alumni Directory", icon: <Users className="h-4 w-4" /> },
-    { value: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
+    {
+      value: "profile",
+      label: "My Profile",
+      icon: <UserCircle className="h-4 w-4" />,
+    },
+    {
+      value: "directory",
+      label: "Alumni Directory",
+      icon: <Users className="h-4 w-4" />,
+    },
+    {
+      value: "settings",
+      label: "Settings",
+      icon: <Settings className="h-4 w-4" />,
+    },
   ];
 
   const filteredAlumni = alumniDirectory.filter(
@@ -58,10 +83,37 @@ const AlumniDashboard = () => {
               Update Your Profile
             </h2>
             <form className="space-y-6">
+              {/* Profile Picture Upload */}
+              <div className="flex flex-col items-center gap-4 mb-6">
+                <div className="relative h-24 w-24 rounded-full overflow-hidden bg-secondary/20 border-2 border-border flex items-center justify-center">
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt="Profile"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <UserCircle className="h-16 w-16 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="w-full max-w-xs"
+                    id="profile-upload"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="Enter your full name" defaultValue="Rahul Sharma" />
+                  <Input
+                    id="name"
+                    placeholder="Enter your full name"
+                    defaultValue="Rahul Sharma"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="graduationYear">Graduation Year</Label>
@@ -105,6 +157,55 @@ const AlumniDashboard = () => {
                     defaultValue="rahul.sharma@microsoft.com"
                   />
                 </div>
+              </div>
+
+              {/* Higher Studies Section */}
+              <div className="pt-4 border-t border-border">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">
+                      Pursuing Higher Studies (MS)?
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable this if you are currently pursuing a Master's
+                      degree
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isHigherStudies}
+                    onCheckedChange={setIsHigherStudies}
+                  />
+                </div>
+
+                {isHigherStudies && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="space-y-2">
+                      <Label htmlFor="university_name">University Name</Label>
+                      <Input
+                        id="university_name"
+                        placeholder="e.g. Stanford University"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="student_id_card">Student ID Card</Label>
+                      <Input id="student_id_card" type="file" accept=".pdf,.jpg,.png" />
+                      <p className="text-xs text-muted-foreground">Upload your student ID card for verification</p>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="admit_card">
+                        Admit Card / Offer Letter
+                      </Label>
+                      <Input
+                        id="admit_card"
+                        type="file"
+                        accept=".pdf,.jpg,.png"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Upload your admit card or offer letter for verification
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button type="submit">Update Profile</Button>
@@ -158,10 +259,14 @@ const AlumniDashboard = () => {
         {activeTab === "settings" && (
           <div className="space-y-6 max-w-2xl">
             <div>
-              <h2 className="text-xl font-semibold text-foreground mb-1">Settings</h2>
-              <p className="text-sm text-muted-foreground">Manage privacy and account details</p>
+              <h2 className="text-xl font-semibold text-foreground mb-1">
+                Settings
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Manage privacy and account details
+              </p>
             </div>
-            
+
             {/* Privacy Settings */}
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -170,36 +275,59 @@ const AlumniDashboard = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Public Profile</p>
-                    <p className="text-sm text-muted-foreground">Allow students to view your profile</p>
+                    <p className="font-medium text-foreground">
+                      Public Profile
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Allow students to view your profile
+                    </p>
                   </div>
-                  <Switch defaultChecked onCheckedChange={(c) => toast.success(`Profile visibility ${c ? 'enabled' : 'disabled'}`)} />
+                  <Switch
+                    defaultChecked
+                    onCheckedChange={(c) =>
+                      toast.success(
+                        `Profile visibility ${c ? "enabled" : "disabled"}`
+                      )
+                    }
+                  />
                 </div>
-                 <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Show Contact Info</p>
-                    <p className="text-sm text-muted-foreground">Display email on directory listing</p>
+                    <p className="font-medium text-foreground">
+                      Show Contact Info
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Display email on directory listing
+                    </p>
                   </div>
-                  <Switch onCheckedChange={(c) => toast.success(`Contact info ${c ? 'visible' : 'hidden'}`)} />
+                  <Switch
+                    onCheckedChange={(c) =>
+                      toast.success(`Contact info ${c ? "visible" : "hidden"}`)
+                    }
+                  />
                 </div>
               </div>
             </div>
 
             {/* Account Security */}
-             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+            <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Lock className="h-4 w-4" /> Security
               </h3>
-               <div className="space-y-4">
-                  <div className="space-y-2">
+              <div className="space-y-4">
+                <div className="space-y-2">
                   <Label htmlFor="alumni-pass">Change Password</Label>
-                  <Input id="alumni-pass" type="password" placeholder="New Password" />
+                  <Input
+                    id="alumni-pass"
+                    type="password"
+                    placeholder="New Password"
+                  />
                 </div>
-                 <Button onClick={() => toast.success("Password updated")}>
+                <Button onClick={() => toast.success("Password updated")}>
                   Update Password
                 </Button>
-               </div>
-             </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

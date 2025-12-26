@@ -49,6 +49,7 @@ import {
   Briefcase,
   GraduationCap,
   Settings,
+  UserCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -58,6 +59,19 @@ const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [showForm, setShowForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImage(reader.result as string);
+        toast.success("Profile picture updated");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const navItems = [
     { value: "overview", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -91,8 +105,12 @@ const StudentDashboard = () => {
               {/* Profile Summary Card */}
               <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-2xl font-bold text-primary">AM</span>
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border">
+                    {profileImage ? (
+                      <img src={profileImage} alt="Profile" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-2xl font-bold text-primary">AM</span>
+                    )}
                   </div>
                   <div>
                     <h3 className="font-semibold text-lg text-foreground">Arjun Malhotra</h3>
@@ -466,6 +484,32 @@ const StudentDashboard = () => {
               <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
             </div>
             
+            <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+              <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <UserCircle className="h-4 w-4" /> Profile Picture
+              </h3>
+              <div className="flex items-center gap-6">
+                <div className="h-20 w-20 rounded-full bg-secondary/20 flex items-center justify-center overflow-hidden border-2 border-border">
+                   {profileImage ? (
+                      <img src={profileImage} alt="Profile Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-2xl font-bold text-muted-foreground">AM</span>
+                    )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profile-upload" className="block">Change Profile Photo</Label>
+                  <Input 
+                    id="profile-upload" 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="max-w-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">Recommended: Square JPG, PNG. Max 2MB.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Lock className="h-4 w-4" /> Account Security
