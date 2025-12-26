@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +12,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const LoginPage = () => {
   const { role } = useParams<{ role: string }>();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Forgot Password State
   const [isResetOpen, setIsResetOpen] = useState(false);
@@ -49,40 +53,96 @@ const LoginPage = () => {
 
   const config = roleConfig[role as keyof typeof roleConfig] || roleConfig.student;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     // Validation
     if (!email || !password) {
       setError("Please fill in all fields");
+      setLoading(false);
       return;
     }
 
     if (!email.includes("@")) {
       setError("Email must contain '@'");
+      setLoading(false);
       return;
     }
 
+    // Optional: Keep domain validation if desired, or remove to allow any email in Firebase
     if (!email.endsWith(config.domain)) {
       setError(`Email must be a valid ${role} email ending with ${config.domain}`);
+      setLoading(false);
       return;
     }
 
-    // Redirect to dashboard (no actual auth)
-    window.location.href = config.dashboardPath;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Check role before redirecting
+      const user = userCredential.user;
+      
+      // Need to fetch role here directly to validate immediately
+      // We cannot rely on AuthContext yet as it updates asynchronously
+      // Import db, doc, getDoc for this check
+      const { doc, getDoc } = await import("firebase/firestore"); // Dynamic import or use top-level if preferred
+      const { db } = await import("@/lib/firebase");
+      
+      const userDoc = await getDoc(doc(db, "Users", user.uid));
+      
+      if (userDoc.exists()) {
+        const userRole = userDoc.data().role;
+        
+        if (userRole === role) {
+           toast.success("Login successful");
+           navigate(config.dashboardPath);
+        } else {
+           // Wrong role
+           await auth.signOut();
+           setError(`Access denied. You are not a ${role}.`);
+           toast.error(`Please login via the ${userRole} portal.`);
+        }
+      } else {
+        await auth.signOut();
+        setError("User profile not found.");
+      }
+      
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const error = err as any;
+      if (error.code === "auth/invalid-credential" || error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+        setError("Invalid email or password");
+      } else {
+        setError("Failed to login. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API call
-    setTimeout(() => {
-      toast.success("Password reset link sent", {
-        description: `We've sent a password reset link to ${resetEmail}`,
-      });
-      setIsResetOpen(false);
-      setResetEmail("");
-    }, 1000);
+    try {
+      // await sendPasswordResetEmail(auth, resetEmail); // Import this from firebase/auth if implementing fully
+      // For now, keeping simulation or actually implement it:
+       
+       // Note: To implement real reset, import sendPasswordResetEmail from firebase/auth
+       // await sendPasswordResetEmail(auth, resetEmail);
+       
+      setTimeout(() => {
+        toast.success("Password reset link sent", {
+          description: `We've sent a password reset link to ${resetEmail}`,
+        });
+        setIsResetOpen(false);
+        setResetEmail("");
+      }, 1000);
+      
+    } catch (error) {
+       toast.error("Failed to send reset link");
+    }
   };
 
   return (
