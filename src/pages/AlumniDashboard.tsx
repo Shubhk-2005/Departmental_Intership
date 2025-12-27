@@ -22,6 +22,19 @@ const AlumniDashboard = () => {
   const [activeTab, setActiveTab] = useState("profile");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfilePhoto(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const navItems = [
     { value: "profile", label: "My Profile", icon: <UserCircle className="h-4 w-4" /> },
     { value: "directory", label: "Alumni Directory", icon: <Users className="h-4 w-4" /> },
@@ -57,6 +70,35 @@ const AlumniDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               Update Your Profile
             </h2>
+
+            {/* Profile Photo */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-20 w-20 rounded-full overflow-hidden bg-muted flex items-center justify-center text-sm font-medium">
+                {profilePhoto ? (
+                  <img
+                    src={profilePhoto}
+                    alt="Alumni profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  "Photo"
+                )}
+              </div>
+              <div>
+                <Label htmlFor="profilePhoto">Profile Photo</Label>
+                <Input
+                  id="profilePhoto"
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Upload a clear face photo (JPG or PNG).
+                </p>
+              </div>
+            </div>
+
             <form className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
@@ -154,6 +196,7 @@ const AlumniDashboard = () => {
             )}
           </div>
         )}
+
         {/* Settings */}
         {activeTab === "settings" && (
           <div className="space-y-6 max-w-2xl">
@@ -161,7 +204,7 @@ const AlumniDashboard = () => {
               <h2 className="text-xl font-semibold text-foreground mb-1">Settings</h2>
               <p className="text-sm text-muted-foreground">Manage privacy and account details</p>
             </div>
-            
+
             {/* Privacy Settings */}
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -173,33 +216,44 @@ const AlumniDashboard = () => {
                     <p className="font-medium text-foreground">Public Profile</p>
                     <p className="text-sm text-muted-foreground">Allow students to view your profile</p>
                   </div>
-                  <Switch defaultChecked onCheckedChange={(c) => toast.success(`Profile visibility ${c ? 'enabled' : 'disabled'}`)} />
+                  <Switch
+                    defaultChecked
+                    onCheckedChange={(c) =>
+                      toast.success(`Profile visibility ${c ? "enabled" : "disabled"}`)
+                    }
+                  />
                 </div>
-                 <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-foreground">Show Contact Info</p>
-                    <p className="text-sm text-muted-foreground">Display email on directory listing</p>
+                    <p className="text-sm text-muted-foreground">
+                      Display email on directory listing
+                    </p>
                   </div>
-                  <Switch onCheckedChange={(c) => toast.success(`Contact info ${c ? 'visible' : 'hidden'}`)} />
+                  <Switch
+                    onCheckedChange={(c) =>
+                      toast.success(`Contact info ${c ? "visible" : "hidden"}`)
+                    }
+                  />
                 </div>
               </div>
             </div>
 
             {/* Account Security */}
-             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+            <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Lock className="h-4 w-4" /> Security
               </h3>
-               <div className="space-y-4">
-                  <div className="space-y-2">
+              <div className="space-y-4">
+                <div className="space-y-2">
                   <Label htmlFor="alumni-pass">Change Password</Label>
                   <Input id="alumni-pass" type="password" placeholder="New Password" />
                 </div>
-                 <Button onClick={() => toast.success("Password updated")}>
+                <Button onClick={() => toast.success("Password updated")}>
                   Update Password
                 </Button>
-               </div>
-             </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
