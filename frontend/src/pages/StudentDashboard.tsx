@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatCard from "@/components/cards/StatCard";
 import AlumniCard from "@/components/cards/AlumniCard";
@@ -13,15 +13,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  placementStats,
   internships,
   alumniDirectory,
   domains,
   internshipStatuses,
-  companyWisePlacements,
-  yearWiseTrends,
-  academicYears,
 } from "@/data/dummyData";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Calendar, Briefcase } from "lucide-react";
+import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsCharts";
 import {
   BarChart,
   Bar,
@@ -47,7 +54,6 @@ import {
   Shield,
   Bell,
   Lock,
-  Briefcase,
   GraduationCap,
   Settings,
   UserCircle,
@@ -61,25 +67,79 @@ const StudentDashboard = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  // Drives State
+  const [drives, setDrives] = useState<any[]>([]);
+  const [selectedDrive, setSelectedDrive] = useState<any>(null);
   
   // Placement Stats Filter State
   const [selectedYear, setSelectedYear] = useState("All Years");
+  
+  // Real Data State (Aggregated)
+  const [dbStats, setDbStats] = useState({
+      placed: 0,
+      totalEligible: 0,
+      percentage: 0,
+      higherStudies: 0
+  });
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<any[]>([]); // Full data for charts
 
-  // Simulate filter effect by adjusting stats (mirroring Admin Dashboard)
-  const getFilteredStats = () => {
-    let multiplier = 1;
-    if (selectedYear !== "All Years") multiplier *= 0.85;
+  useEffect(() => {
+    // Fetch Drives
+    const q = query(collection(db, "placement_drives"), orderBy("postedAt", "desc"));
+    const unsubscribeDrives = onSnapshot(q, (snapshot) => {
+      const drivesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setDrives(drivesData);
+    });
 
-    return {
-      placed: Math.round(placementStats.placedStudents * multiplier),
-      total: Math.round(placementStats.totalStudents * multiplier) || 1,
-      percentage: Math.round(
-        placementStats.placementPercentage * (multiplier > 0.5 ? 1 : 0.8)
-      ),
-    };
-  };
+    return () => unsubscribeDrives();
+  }, []);
 
-  const filteredStats = getFilteredStats();
+  useEffect(() => {
+      const fetchStats = async () => {
+          try {
+              const recordsRef = collection(db, "placement_stats_yearly");
+              const snapshot = await getDocs(recordsRef);
+              const data = snapshot.docs.map(doc => doc.data());
+              
+              // Extract unique years
+              const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+              setAvailableYears(years);
+              setAnalyticsData(data); // Store full data
+
+              // Filter
+              let filteredData = data;
+              if (selectedYear !== "All Years") {
+                  filteredData = data.filter((d: any) => d.year === selectedYear);
+              }
+
+              // Calculate Aggregated Stats
+              const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+              const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+              const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+              
+              const totalSuccess = placedCount + higherStudiesCount;
+              
+              setDbStats({
+                  placed: placedCount,
+                  totalEligible: totalEligible,
+                  higherStudies: higherStudiesCount,
+                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0
+              });
+
+          } catch (error) {
+              console.error("Error fetching stats:", error);
+          }
+      };
+
+      fetchStats();
+  }, [selectedYear]);
+
+  const filteredStats = dbStats;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -146,6 +206,7 @@ const StudentDashboard = () => {
 
         {/* Overview */}
         {activeTab === "overview" && (
+          <>
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Profile Summary Card */}
@@ -260,29 +321,14 @@ const StudentDashboard = () => {
                   {/* Upcoming Drives */}
                   <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
                     <h3 className="font-semibold text-foreground mb-4">
-                      Upcoming Drives
+                      Upcoming Drives ({drives.length})
                     </h3>
-                    <div className="space-y-4">
-                      {[
-                        {
-                          company: "Accenture",
-                          date: "20 Dec 2024",
-                          role: "Software Engineer",
-                        },
-                        {
-                          company: "Capgemini",
-                          date: "22 Dec 2024",
-                          role: "Analyst",
-                        },
-                        {
-                          company: "Jio",
-                          date: "25 Dec 2024",
-                          role: "Graduate Trainee",
-                        },
-                      ].map((drive, i) => (
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                      {drives.map((drive) => (
                         <div
-                          key={i}
-                          className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0"
+                          key={drive.id}
+                          className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0 cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                          onClick={() => setSelectedDrive(drive)}
                         >
                           <div>
                             <p className="text-sm font-medium text-foreground">
@@ -299,12 +345,51 @@ const StudentDashboard = () => {
                           </div>
                         </div>
                       ))}
+                      {drives.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No upcoming drives.</p>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          <Dialog open={!!selectedDrive} onOpenChange={(open) => !open && setSelectedDrive(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  {selectedDrive?.company}
+                </DialogTitle>
+                <DialogDescription>
+                  Detailed information about this Drive.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                 <div className="flex items-center gap-2 text-muted-foreground">
+                    <Briefcase className="h-4 w-4" />
+                    <span className="font-medium text-foreground">{selectedDrive?.role}</span>
+                 </div>
+                 <div className="flex items-center gap-2 text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    <span className="font-medium text-foreground">{selectedDrive?.date}</span>
+                 </div>
+                 
+                 <div className="bg-muted/30 p-4 rounded-lg border border-border mt-4">
+                    <h4 className="text-sm font-semibold mb-2">Description & Eligibility</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        {selectedDrive?.description || "No additional details provided."}
+                    </p>
+                 </div>
+              </div>
+
+               <div className="flex justify-end gap-2">
+                 <Button variant="outline" onClick={() => setSelectedDrive(null)}>Close</Button>
+               </div>
+            </DialogContent>
+          </Dialog>
+          </>
         )}
 
         {/* Add Internship Form */}
@@ -493,7 +578,8 @@ const StudentDashboard = () => {
                             <SelectValue placeholder="Year" />
                         </SelectTrigger>
                         <SelectContent>
-                            {academicYears.map((year) => (
+                            <SelectItem value="All Years">All Years</SelectItem>
+                            {availableYears.map((year) => (
                                 <SelectItem key={year} value={year}>
                                     {year}
                                 </SelectItem>
@@ -517,109 +603,30 @@ const StudentDashboard = () => {
               <StatCard
                 title="Total Placed"
                 value={filteredStats.placed}
-                subtitle={`${filteredStats.percentage}% placement rate`}
+                subtitle={`${filteredStats.percentage}% success rate`}
                 icon={<Users className="h-6 w-6" />}
               />
               <StatCard
-                title="Highest Package"
-                value={placementStats.highestPackage}
-                subtitle="Top offer this year"
+                title="Higher Studies"
+                value={filteredStats.higherStudies}
+                subtitle="Pursued Masters/PhD"
                 icon={<Award className="h-6 w-6" />}
               />
               <StatCard
-                title="Average Package"
-                value={placementStats.averagePackage}
-                subtitle="Across all placements"
+                title="Total Eligible"
+                value={filteredStats.totalEligible}
+                subtitle="Students registered"
                 icon={<TrendingUp className="h-6 w-6" />}
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Company Chart */}
-              <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                <h3 className="font-semibold text-foreground mb-4">
-                  Top Recruiters
-                </h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={companyWisePlacements}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="hsl(var(--border))"
-                      />
-                      <XAxis
-                        dataKey="company"
-                        tick={{
-                          fill: "hsl(var(--muted-foreground))",
-                          fontSize: 12,
-                        }}
-                      />
-                      <YAxis
-                        tick={{
-                          fill: "hsl(var(--muted-foreground))",
-                          fontSize: 12,
-                        }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Bar
-                        dataKey="placements"
-                        fill="hsl(var(--primary))"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Trend Chart */}
-              <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                <h3 className="font-semibold text-foreground mb-4">
-                  Placement Trends
-                </h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={yearWiseTrends}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="hsl(var(--border))"
-                      />
-                      <XAxis
-                        dataKey="year"
-                        tick={{
-                          fill: "hsl(var(--muted-foreground))",
-                          fontSize: 12,
-                        }}
-                      />
-                      <YAxis
-                        tick={{
-                          fill: "hsl(var(--muted-foreground))",
-                          fontSize: 12,
-                        }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="placed"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={2}
-                        dot={{ fill: "hsl(var(--primary))" }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+            {/* Visualizations Component */}
+            <div className="mt-6">
+                <PlacementAnalyticsCharts 
+                    data={analyticsData}
+                    selectedYear={selectedYear}
+                    availableYears={availableYears}
+                />
             </div>
           </div>
         )}

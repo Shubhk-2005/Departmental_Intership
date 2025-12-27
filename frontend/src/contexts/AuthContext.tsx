@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { User, onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 interface AuthContextType {
   user: User | null;
   userRole: string | null | undefined; // undefined = loading/unknown, null = no role, string = role
   loading: boolean;
+  isMaintenanceMode: boolean;
   logout: () => Promise<void>;
 }
 
@@ -14,6 +15,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   userRole: undefined,
   loading: true,
+  isMaintenanceMode: false,
   logout: async () => {},
 });
 
@@ -25,6 +27,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     undefined
   );
   const [loading, setLoading] = useState(true);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
+
+  // Maintenance Mode Listener
+  useEffect(() => {
+    const unsubscribeMaintenance = onSnapshot(
+      doc(db, "system_settings", "general"),
+      (doc) => {
+        if (doc.exists()) {
+          setIsMaintenanceMode(doc.data().maintenanceMode || false);
+        }
+      }
+    );
+
+    return () => unsubscribeMaintenance();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -62,7 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, userRole, loading, logout }}>
+    <AuthContext.Provider value={{ user, userRole, loading, isMaintenanceMode, logout }}>
       {children}
     </AuthContext.Provider>
   );

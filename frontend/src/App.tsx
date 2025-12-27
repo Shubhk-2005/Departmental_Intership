@@ -10,14 +10,24 @@ import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import AlumniDashboard from "./pages/AlumniDashboard";
 import NotFound from "./pages/NotFound";
+import MaintenancePage from "./pages/MaintenancePage";
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children, allowedRole }: { children: React.ReactNode; allowedRole: string }) => {
-  const { user, userRole, loading } = useAuth();
+  const { user, userRole, loading, isMaintenanceMode } = useAuth();
 
   if (loading) {
     return <div>Loading...</div>; // Or a proper spinner
+  }
+
+  // Maintenance Check
+  if (isMaintenanceMode && userRole !== "admin") {
+    // If user is admin (or we are checking if they are admin), we might let them pass or check further.
+    // Actually `userRole` might be 'admin', 'student', 'alumni'.
+    // Logic: If maintenance is ON, ONLY admins can access protected routes.
+    // If I am a student trying to access /dashboard/student -> Redirect to Maintenance.
+    return <Navigate to="/maintenance" replace />;
   }
 
   if (!user) {
@@ -70,6 +80,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import AlumniCard from "@/components/cards/AlumniCard";
+import StatCard from "@/components/cards/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { alumniDirectory } from "@/data/dummyData";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 import {
   LayoutDashboard,
   UserCircle,
@@ -14,7 +17,19 @@ import {
   Shield,
   Lock,
   Eye,
+  BarChart3,
+  TrendingUp,
+  Award,
+  Filter,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsCharts";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
@@ -23,6 +38,57 @@ const AlumniDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isHigherStudies, setIsHigherStudies] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  // Stats State
+  const [stats, setStats] = useState({
+      placed: 0,
+      totalEligible: 0,
+      percentage: 0,
+      higherStudies: 0
+  });
+  const [selectedYear, setSelectedYear] = useState("All Years");
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<any[]>([]);
+
+  useEffect(() => {
+      const fetchStats = async () => {
+          try {
+              const recordsRef = collection(db, "placement_stats_yearly");
+              const snapshot = await getDocs(recordsRef);
+              const data = snapshot.docs.map(doc => doc.data());
+              
+              if (data.length === 0) return;
+
+              // Store full data and available years
+              const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+              setAvailableYears(years);
+              setAnalyticsData(data);
+
+              // Filter Data based on selectedYear
+              let filteredData = data;
+              if (selectedYear !== "All Years") {
+                   filteredData = data.filter((d: any) => d.year === selectedYear);
+              }
+
+              const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+              const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+              const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+              
+              setStats({
+                  placed: placedCount,
+                  totalEligible: totalEligible,
+                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0,
+                  higherStudies: higherStudiesCount
+              });
+          } catch (error) {
+              console.error("Error fetching stats:", error);
+          }
+      };
+
+      if (activeTab === "statistics") {
+        fetchStats();
+      }
+  }, [activeTab, selectedYear]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -45,6 +111,11 @@ const AlumniDashboard = () => {
       value: "directory",
       label: "Alumni Directory",
       icon: <Users className="h-4 w-4" />,
+    },
+    {
+      value: "statistics",
+      label: "Placement Stats",
+      icon: <BarChart3 className="h-4 w-4" />,
     },
     {
       value: "settings",
@@ -164,10 +235,10 @@ const AlumniDashboard = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div className="space-y-0.5">
                     <Label className="text-base">
-                      Pursuing Higher Studies (MS)?
+                      Persued Higher Studies (MS)?
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      Enable this if you are currently pursuing a Master's
+                      Enable this if you have persued a Master's
                       degree
                     </p>
                   </div>
@@ -255,6 +326,75 @@ const AlumniDashboard = () => {
             )}
           </div>
         )}
+        {/* Statistics Tab */}
+        {activeTab === "statistics" && (
+            <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border border-border">
+                    <div>
+                        <h2 className="text-xl font-semibold text-foreground mb-1">
+                            Placement Statistics
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            Overall department performance
+                        </p>
+                    </div>
+                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <Select value={selectedYear} onValueChange={setSelectedYear}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Year" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="All Years">All Years</SelectItem>
+                                {availableYears.map((year) => (
+                                    <SelectItem key={year} value={year}>
+                                        {year}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Reset Filters"
+                            onClick={() => {
+                                setSelectedYear("All Years");
+                            }}
+                        >
+                            <Filter className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <StatCard
+                        title="Total Students Placed"
+                        value={stats.placed}
+                        subtitle={`Out of ${stats.totalEligible} registered`}
+                        icon={<Users className="h-6 w-6" />}
+                    />
+                    <StatCard
+                        title="Success Rate"
+                        value={`${stats.percentage}%`}
+                        subtitle="Placement Rate"
+                        icon={<TrendingUp className="h-6 w-6" />}
+                        trend={{ value: "Aggregated", positive: true }}
+                    />
+                    <StatCard
+                        title="Higher Studies"
+                        value={stats.higherStudies}
+                        subtitle="Pursued Masters/PhD"
+                        icon={<Award className="h-6 w-6" />}
+                    />
+                </div>
+                <div className="mt-6">
+                    <PlacementAnalyticsCharts 
+                        data={analyticsData} // Pass full data
+                        selectedYear={selectedYear}
+                        availableYears={availableYears}
+                    />
+                </div>
+            </div>
+        )}
+
         {/* Settings */}
         {activeTab === "settings" && (
           <div className="space-y-6 max-w-2xl">

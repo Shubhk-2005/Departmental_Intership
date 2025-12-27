@@ -9,9 +9,27 @@ interface StatCardProps {
     value: string;
     positive: boolean;
   };
+  loading?: boolean;
 }
 
-const StatCard = ({ title, value, subtitle, icon, trend }: StatCardProps) => {
+const StatCard = ({ title, value, subtitle, icon, trend, loading }: StatCardProps) => {
+  if (loading) {
+    return (
+      <div className="stat-card">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-24 bg-muted animate-pulse rounded"></div>
+            <div className="h-8 w-16 bg-muted animate-pulse rounded"></div>
+            <div className="h-4 w-32 bg-muted animate-pulse rounded"></div>
+          </div>
+          <div className="bg-primary/10 p-3 rounded-lg opacity-50">
+             <div className="h-6 w-6 bg-primary/20 animate-pulse rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="stat-card">
       <div className="flex items-start justify-between">

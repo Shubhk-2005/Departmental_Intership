@@ -3,12 +3,57 @@ import PublicFooter from "@/components/layout/PublicFooter";
 import StatCard from "@/components/cards/StatCard";
 import TestimonialCard from "@/components/cards/TestimonialCard";
 import TeamMemberCard from "@/components/cards/TeamMemberCard";
-import { placementStats, teamMembers } from "@/data/dummyData";
+import { teamMembers } from "@/data/dummyData";
 import { Users, TrendingUp, IndianRupee, Building2, Briefcase, Award } from "lucide-react";
 import { useTestimonials } from "@/hooks/useTestimonials";
+import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
 const Index = () => {
-    const { testimonials } = useTestimonials();
+  const { testimonials } = useTestimonials();
+  
+  // Stats State
+  const [stats, setStats] = useState({
+      placed: 0,
+      totalEligible: 0,
+      percentage: 0,
+      higherStudies: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+      const fetchStats = async () => {
+          try {
+              const recordsRef = collection(db, "placement_stats_yearly");
+              const snapshot = await getDocs(recordsRef);
+              const data = snapshot.docs.map(doc => doc.data());
+              
+              if (data.length === 0) return;
+
+              const placedCount = data.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+              const higherStudiesCount = data.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+              const totalEligible = data.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+              
+              const totalSuccess = placedCount + higherStudiesCount;
+
+              setStats({
+                  placed: placedCount,
+                  totalEligible: totalEligible,
+                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0,
+                  higherStudies: higherStudiesCount
+              });
+
+          } catch (error) {
+              console.error("Error fetching stats:", error);
+          } finally {
+            setLoading(false);
+          }
+      };
+
+      fetchStats();
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <PublicHeader />
@@ -39,61 +84,39 @@ const Index = () => {
           <div className="container-narrow section-padding">
             <div className="text-center mb-10 animate-fade-in">
               <h2 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">
-                Placement Statistics Overview
+                Placement Statistics Overview (2014 - Present)
               </h2>
               <p className="text-muted-foreground">
-                Academic Year 2023-24 Performance Highlights
+                Live Performance Highlights
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
                 <StatCard
                   title="Total Students Placed"
-                  value={placementStats.placedStudents}
-                  subtitle={`Out of ${placementStats.totalStudents} eligible students`}
+                  value={stats.placed}
+                  subtitle={`Out of ${stats.totalEligible} registered students`}
                   icon={<Users className="h-6 w-6" />}
+                  loading={loading}
                 />
               </div>
               <div className="animate-slide-up" style={{ animationDelay: '0.3s' }}>
                 <StatCard
-                  title="Placement Percentage"
-                  value={`${placementStats.placementPercentage}%`}
-                  subtitle="Highest in department history"
+                  title="Success Rate"
+                  value={`${stats.percentage}%`}
+                  subtitle="Placement Rate"
                   icon={<TrendingUp className="h-6 w-6" />}
-                  trend={{ value: "5% from last year", positive: true }}
+                  trend={{ value: "Aggregated", positive: true }}
+                  loading={loading}
                 />
               </div>
               <div className="animate-slide-up" style={{ animationDelay: '0.4s' }}>
                 <StatCard
-                  title="Highest Package"
-                  value={placementStats.highestPackage}
-                  subtitle="Offered by Microsoft"
+                  title="Higher Studies"
+                  value={stats.higherStudies}
+                  subtitle="Pursued Masters/PhD"
                   icon={<Award className="h-6 w-6" />}
-                />
-              </div>
-              <div className="animate-slide-up" style={{ animationDelay: '0.5s' }}>
-                <StatCard
-                  title="Average Package"
-                  value={placementStats.averagePackage}
-                  subtitle="Across all placements"
-                  icon={<IndianRupee className="h-6 w-6" />}
-                  trend={{ value: "12% from last year", positive: true }}
-                />
-              </div>
-              <div className="animate-slide-up" style={{ animationDelay: '0.6s' }}>
-                <StatCard
-                  title="Companies Visited"
-                  value={placementStats.companiesVisited}
-                  subtitle="Including Fortune 500 companies"
-                  icon={<Building2 className="h-6 w-6" />}
-                />
-              </div>
-              <div className="animate-slide-up" style={{ animationDelay: '0.7s' }}>
-                <StatCard
-                  title="Internships Completed"
-                  value={placementStats.internshipsCompleted}
-                  subtitle="Summer & Winter internships"
-                  icon={<Briefcase className="h-6 w-6" />}
+                  loading={loading}
                 />
               </div>
             </div>
