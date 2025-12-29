@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,9 @@ import {
   Upload,
   Loader2,
   AlertCircle,
+  Plus,
+  Save,
+  X,
 } from "lucide-react";
 import {
   Select,
@@ -17,7 +20,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
-import { collection, writeBatch, doc } from "firebase/firestore";
+import { collection, writeBatch, doc, setDoc, getDocs } from "firebase/firestore";
 
 // NEW Interface for Yearly Aggregated Data
 interface YearlyRecord {
@@ -38,6 +41,78 @@ interface AnalyticsData {
 export const PlacementRecordsTab = () => {
   const [records, setRecords] = useState<YearlyRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
+  
+  // Manual Entry State
+  const [manualForm, setManualForm] = useState({
+    year: "",
+    eligible: "",
+    placed: "",
+    higherStudies: ""
+  });
+
+  // Fetch Existing Records on Mount
+  useEffect(() => {
+    const fetchRecords = async () => {
+        try {
+            const querySnapshot = await getDocs(collection(db, "placement_stats_yearly"));
+            const fetchedData: YearlyRecord[] = [];
+            querySnapshot.forEach((doc) => {
+                fetchedData.push(doc.data() as YearlyRecord);
+            });
+            // Sort by Year descending
+            fetchedData.sort((a,b) => b.year.localeCompare(a.year));
+            setRecords(fetchedData);
+        } catch (error) {
+            console.error("Error fetching records:", error);
+            toast.error("Failed to load existing records");
+        }
+    };
+
+    fetchRecords();
+  }, []);
+
+  const handleManualSave = async () => {
+    if (!manualForm.year) {
+      toast.error("Year is required (e.g., 2023-24)");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+        const eligible = Number(manualForm.eligible) || 0;
+        const placed = Number(manualForm.placed) || 0;
+        const higherStudies = Number(manualForm.higherStudies) || 0;
+        const unplaced = Math.max(0, eligible - (placed + higherStudies));
+
+        const newRecord: YearlyRecord = {
+            year: manualForm.year,
+            eligible,
+            placed,
+            higherStudies,
+            unplaced
+        };
+
+        // Save to Firestore
+        await setDoc(doc(db, "placement_stats_yearly", manualForm.year), newRecord);
+
+        // Update local state
+        setRecords(prev => {
+            const others = prev.filter(r => r.year !== manualForm.year);
+            const updated = [...others, newRecord].sort((a,b) => b.year.localeCompare(a.year));
+            return updated;
+        });
+
+        toast.success(`Record for ${manualForm.year} saved!`);
+        setIsManualOpen(false);
+        setManualForm({ year: "", eligible: "", placed: "", higherStudies: "" });
+    } catch (error) {
+        console.error("Manual save error:", error);
+        toast.error("Failed to save record");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   // Parse Excel File & Save to Firestore
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,10 +180,64 @@ export const PlacementRecordsTab = () => {
             Upload Placement Records
           </h2>
           <p className="text-sm text-muted-foreground">
-            Upload Excel to update yearly stats
+            Upload Excel to update yearly stats (merges with existing data)
           </p>
         </div>
+        <Button onClick={() => setIsManualOpen(!isManualOpen)} variant="outline" className="gap-2">
+            {isManualOpen ? <X className="h-4 w-4"/> : <Plus className="h-4 w-4"/>}
+            {isManualOpen ? "Cancel" : "Add Year Manually"}
+        </Button>
       </div>
+
+      {/* Manual Entry Form */}
+      {isManualOpen && (
+        <div className="bg-card p-6 rounded-lg border border-border mt-4 animate-in slide-in-from-top-2">
+            <h3 className="font-semibold mb-4">Add Single Year Record</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Year (e.g. 2023-24)</label>
+                    <Input 
+                        placeholder="2023-24" 
+                        value={manualForm.year}
+                        onChange={e => setManualForm({...manualForm, year: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Total Eligible</label>
+                    <Input 
+                        type="number"
+                        placeholder="0" 
+                        value={manualForm.eligible}
+                        onChange={e => setManualForm({...manualForm, eligible: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Placed</label>
+                    <Input 
+                        type="number" 
+                        placeholder="0"
+                        value={manualForm.placed}
+                        onChange={e => setManualForm({...manualForm, placed: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Higher Studies</label>
+                    <Input 
+                        type="number" 
+                        placeholder="0"
+                        value={manualForm.higherStudies}
+                        onChange={e => setManualForm({...manualForm, higherStudies: e.target.value})}
+                    />
+                </div>
+            </div>
+            <div className="flex justify-end">
+                <Button onClick={handleManualSave} disabled={loading} className="gap-2">
+                    {loading ? <Loader2 className="animate-spin h-4 w-4" /> : <Save className="h-4 w-4" />}
+                    Save Record
+                </Button>
+            </div>
+        </div>
+      )}
 
       {/* Upload Section */}
       <div className="bg-card p-6 rounded-lg border border-border dashed hover:bg-muted/30 transition-colors">
