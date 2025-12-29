@@ -44,17 +44,17 @@ export const testimonials = [
 
 // Team Members
 export const teamMembers = {
+  hod: {
+    name: "Dr.M. Kiruthika",
+    designation: "Head of Department - Computer Engineering",
+    email: "m.kiruthika@fcrit.ac.in",
+    phone: "+91 22 1234 5679",
+  },
   tpo: {
     name: "Dr. Mahendra Rane",
     designation: "Training & Placement Officer",
     email: "tpo@fcrit.ac.in",
     phone: "+91 9819072834",
-  },
-  hod: {
-    name: "Dr.M. Kiruthika",
-    designation: "Head of Department - Computer Engineering",
-    email: "m.kiruthika@fcrit.ac.in ",
-    phone: "+91 22 1234 5679",
   },
   coordinators: [
     {
