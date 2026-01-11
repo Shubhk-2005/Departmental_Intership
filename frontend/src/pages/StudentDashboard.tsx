@@ -13,11 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  internships,
-  alumniDirectory,
   domains,
   internshipStatuses,
+  currencies,
+  examTypes,
 } from "@/data/dummyData";
+import { useInternships, useCreateInternship } from "@/hooks/useInternships";
+import { useAlumni } from "@/hooks/useAlumni";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import {
@@ -61,11 +63,19 @@ import {
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { api } from "@/services/api.service";
 
 const StudentDashboard = () => {
+  // Fetch data from database using custom hooks
+  const { data: internships = [], isLoading: internshipsLoading } = useInternships();
+  const { data: alumniDirectory = [], isLoading: alumniLoading } = useAlumni();
+  const createInternship = useCreateInternship();
+  
   const [activeTab, setActiveTab] = useState("overview");
   const [showForm, setShowForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedInternshipType, setSelectedInternshipType] = useState<string>("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   // Drives State
@@ -141,15 +151,26 @@ const StudentDashboard = () => {
 
   const filteredStats = dbStats;
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Create preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfileImage(reader.result as string);
-        toast.success("Profile picture updated");
       };
       reader.readAsDataURL(file);
+      
+      // Upload to Firebase Storage
+      try {
+        toast.info("Uploading profile picture...");
+        const response = await api.upload.uploadProfilePhoto(file);
+        console.log('Profile photo uploaded:', response.data.file.url);
+        toast.success("Profile picture uploaded successfully!");
+      } catch (error) {
+        console.error('Profile photo upload failed:', error);
+        toast.error("Failed to upload profile picture");
+      }
     }
   };
 
@@ -168,6 +189,11 @@ const StudentDashboard = () => {
       value: "view-internships",
       label: "My Opportunities",
       icon: <List className="h-4 w-4" />,
+    },
+    {
+      value: "competitive-exams",
+      label: "Competitive Exams",
+      icon: <Award className="h-4 w-4" />,
     },
     {
       value: "statistics",
@@ -402,13 +428,14 @@ const StudentDashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
-                  <Select>
+                  <Select onValueChange={setSelectedCategory}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Internship">Internship</SelectItem>
                       <SelectItem value="Placement">Placement</SelectItem>
+                      <SelectItem value="Higher Studies">Higher Studies</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -451,6 +478,52 @@ const StudentDashboard = () => {
                   <Label htmlFor="duration">Duration (if applicable)</Label>
                   <Input id="duration" placeholder="e.g., 3 months" />
                 </div>
+
+                {/* Internship Type - Only for Internship category */}
+                {selectedCategory === "Internship" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="internshipType">Internship Type</Label>
+                    <Select onValueChange={setSelectedInternshipType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Paid">Paid</SelectItem>
+                        <SelectItem value="Unpaid">Unpaid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Stipend Fields - Only for Paid Internships */}
+                {selectedCategory === "Internship" && selectedInternshipType === "Paid" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="stipendAmount">Stipend Amount</Label>
+                      <Input
+                        id="stipendAmount"
+                        type="number"
+                        placeholder="e.g., 15000"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stipendCurrency">Currency</Label>
+                      <Select defaultValue="INR">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency} value={currency}>
+                              {currency}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="status">Status</Label>
                   <Select onValueChange={setSelectedStatus}>
@@ -467,8 +540,49 @@ const StudentDashboard = () => {
                   </Select>
                 </div>
 
-                {(selectedStatus === "Ongoing" ||
-                  selectedStatus === "Completed") && (
+                {/* Higher Studies LOR Section */}
+                {selectedCategory === "Higher Studies" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="universityName">University Name</Label>
+                      <Input
+                        id="universityName"
+                        placeholder="e.g., Stanford University"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="programName">Program</Label>
+                      <Input
+                        id="programName"
+                        placeholder="e.g., MS in Computer Science"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="facultyName">LOR - Faculty Name</Label>
+                      <Input
+                        id="facultyName"
+                        placeholder="Name of faculty issuing LOR"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="facultyEmail">Faculty Email</Label>
+                      <Input
+                        id="facultyEmail"
+                        type="email"
+                        placeholder="faculty@university.edu"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="facultyDepartment">Faculty Department</Label>
+                      <Input
+                        id="facultyDepartment"
+                        placeholder="e.g., Computer Engineering"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {selectedStatus === "Ongoing" && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="startDate">Start Date</Label>
@@ -497,70 +611,185 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               My Opportunities
             </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Company
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Role
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Category
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Type
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {internships.slice(0, 5).map((intern) => (
-                    <tr
-                      key={intern.id}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="py-3 px-4 text-foreground">
-                        {intern.company}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {intern.role}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {(intern as any).category || "Internship"}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            (intern as any).type === "On-campus"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-purple-100 text-purple-700"
-                          }`}
-                        >
-                          {(intern as any).type || "Off-campus"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            intern.status === "Completed"
-                              ? "bg-success/10 text-success"
-                              : intern.status === "Ongoing"
-                              ? "bg-info/10 text-info"
-                              : "bg-warning/10 text-warning"
-                          }`}
-                        >
-                          {intern.status}
-                        </span>
-                      </td>
+            
+            {internshipsLoading ? (
+              <div className="text-center py-12">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+                <p className="mt-4 text-muted-foreground">Loading your opportunities...</p>
+              </div>
+            ) : internships.length === 0 ? (
+              <div className="text-center py-12 bg-muted/50 rounded-lg border border-border">
+                <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">No opportunities yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Add your first internship or placement to get started!
+                </p>
+                <Button onClick={() => setActiveTab("add-internship")}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Add Opportunity
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 font-semibold text-foreground">
+                        Company
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground">
+                        Role
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground">
+                        Category
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground">
+                        Type
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground">
+                        Status
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {internships.map((intern) => (
+                      <tr
+                        key={intern.id}
+                        className="border-b border-border last:border-0"
+                      >
+                        <td className="py-3 px-4 text-foreground">
+                          {intern.companyName}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground">
+                          {intern.role}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground">
+                          {intern.category || "Internship"}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              intern.type === "On-campus"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}
+                          >
+                            {intern.type || "Off-campus"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              intern.status === "Ongoing"
+                                ? "bg-info/10 text-info"
+                                : "bg-warning/10 text-warning"
+                            }`}
+                          >
+                            {intern.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Competitive Exams */}
+        {activeTab === "competitive-exams" && (
+          <div className="form-section max-w-2xl">
+            <h2 className="text-xl font-semibold text-foreground mb-6">
+              Add Competitive Exam Score
+            </h2>
+            <form className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="examType">Exam Type</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select exam" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {examTypes.map((exam) => (
+                        <SelectItem key={exam} value={exam}>
+                          {exam}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="score">Score/Percentile</Label>
+                  <Input
+                    id="score"
+                    placeholder="e.g., 320 or 99.5%"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="examDate">Exam Date</Label>
+                  <Input id="examDate" type="date" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="validityPeriod">Valid Until</Label>
+                  <Input id="validityPeriod" type="date" />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="scoreReport">Score Report (Optional)</Label>
+                  <Input
+                    id="scoreReport"
+                    type="file"
+                    accept=".pdf,.jpg,.png"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload your official score report
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button type="submit">Add Exam Score</Button>
+                <Button type="button" variant="outline">
+                  Clear Form
+                </Button>
+              </div>
+            </form>
+
+            {/* Display existing exam scores */}
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                My Exam Scores
+              </h3>
+              <div className="space-y-3">
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-semibold text-foreground">GRE</h4>
+                      <p className="text-sm text-muted-foreground">Score: 320</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Date: 15 May 2024 • Valid until: 15 May 2029
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-semibold text-foreground">TOEFL</h4>
+                      <p className="text-sm text-muted-foreground">Score: 110</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Date: 20 Jun 2024 • Valid until: 20 Jun 2026
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -637,18 +866,34 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               Alumni Directory
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {alumniDirectory.map((alumni) => (
-                <AlumniCard
-                  key={alumni.id}
-                  name={alumni.name}
-                  graduationYear={alumni.graduationYear}
-                  company={alumni.company}
-                  role={alumni.role}
-                  linkedinUrl={alumni.linkedinUrl}
-                />
-              ))}
-            </div>
+            
+            {alumniLoading ? (
+              <div className="text-center py-12">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+                <p className="mt-4 text-muted-foreground">Loading alumni directory...</p>
+              </div>
+            ) : alumniDirectory.length === 0 ? (
+              <div className="text-center py-12 bg-muted/50 rounded-lg border border-border">
+                <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">No alumni profiles yet</h3>
+                <p className="text-muted-foreground">
+                  Alumni profiles will appear here once they're added.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {alumniDirectory.map((alumni) => (
+                  <AlumniCard
+                    key={alumni.id}
+                    name={alumni.name}
+                    graduationYear={alumni.graduationYear}
+                    company={alumni.company}
+                    role={alumni.role}
+                    linkedinUrl={alumni.linkedinUrl}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
         {/* Settings */}

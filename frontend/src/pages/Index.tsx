@@ -161,6 +161,15 @@ const Index = () => {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {teamMembers.coordinators.map((coordinator, index) => (
+                <TeamMemberCard
+                  key={index}
+                  name={coordinator.name}
+                  designation={coordinator.designation}
+                  email={coordinator.email}
+                  phone={coordinator.phone}
+                />
+              ))}
               <TeamMemberCard
                 name={teamMembers.tpo.name}
                 designation={teamMembers.tpo.designation}
@@ -173,15 +182,6 @@ const Index = () => {
                 email={teamMembers.hod.email}
                 phone={teamMembers.hod.phone}
               />
-              {teamMembers.coordinators.map((coordinator, index) => (
-                <TeamMemberCard
-                  key={index}
-                  name={coordinator.name}
-                  designation={coordinator.designation}
-                  email={coordinator.email}
-                  phone={coordinator.phone}
-                />
-              ))}
             </div>
           </div>
         </section>

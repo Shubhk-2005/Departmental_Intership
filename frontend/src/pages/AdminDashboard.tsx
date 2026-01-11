@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatCard from "@/components/cards/StatCard";
+import AlumniCard from "@/components/cards/AlumniCard";
 import { Button } from "@/components/ui/button";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -11,6 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   LayoutDashboard,
   Settings,
@@ -29,6 +40,7 @@ import {
   Lock,
   Shield,
   Calendar,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -51,7 +63,9 @@ import {
   Legend,
 } from "recharts";
 import { useTestimonials } from "@/hooks/useTestimonials";
-import { MessageSquare, Trash2, FileSpreadsheet } from "lucide-react";
+import { useAlumni } from "@/hooks/useAlumni";
+import { MessageSquare, Trash2, FileSpreadsheet, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import { PlacementRecordsTab } from "@/components/admin/PlacementRecordsTab";
 import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsCharts";
 import { db, auth } from "@/lib/firebase"; // Ensure auth is imported
@@ -389,8 +403,711 @@ const TestimonialsTab = () => {
   );
 };
 
-  
-  const AdminDashboard = () => {
+// IMS Uploads Tab Component
+const IMSUploadsTab = () => {
+  const [uploadedData, setUploadedData] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [pendingFileData, setPendingFileData] = useState<any[]>([]);
+
+  // Fetch existing IMS data from Firestore
+  useEffect(() => {
+    const fetchIMSData = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "ims_internships"));
+        const data = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUploadedData(data);
+      } catch (error) {
+        console.error("Error fetching IMS data:", error);
+        toast.error("Failed to load IMS data");
+      }
+    };
+    fetchIMSData();
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('File upload triggered');
+    const file = e.target.files?.[0];
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error("Please upload a valid Excel file (.xlsx or .xls)");
+      return;
+    }
+
+    setIsUploading(true);
+    toast.info("Processing Excel file...");
+    
+    try {
+      const reader = new FileReader();
+      
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error);
+        toast.error("Failed to read file");
+        setIsUploading(false);
+      };
+      
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, { type: 'binary' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws);
+
+          // Validate required fields
+          const requiredFields = [
+            'Academic Year', 'Student Name', 'Roll Number', 'Branch',
+            'Division', 'Year of Study', 'Number of Days of Internship',
+            'Internship Start Date', 'Internship End Date', 'Organization Name',
+            'Organization Address', 'Internship Report', 'Internship Completion Certificate'
+          ];
+
+          if (data.length === 0) {
+            toast.error("Excel file is empty");
+            setIsUploading(false);
+            return;
+          }
+
+          const firstRow: any = data[0];
+          const actualColumns = Object.keys(firstRow);
+          
+          // Normalize function to handle case-insensitive and whitespace trimming
+          const normalize = (str: string) => str.toLowerCase().trim().replace(/\s+/g, ' ');
+          
+          // Check for missing fields with normalized comparison
+          const normalizedActualColumns = actualColumns.map(normalize);
+          const missingFields = requiredFields.filter(field => 
+            !normalizedActualColumns.includes(normalize(field))
+          );
+          
+          if (missingFields.length > 0) {
+            console.log('Required fields:', requiredFields);
+            console.log('Actual columns found:', actualColumns);
+            toast.error(`Missing required fields: ${missingFields.join(', ')}. Found columns: ${actualColumns.slice(0, 5).join(', ')}...`);
+            setIsUploading(false);
+            return;
+          }
+
+          // Store parsed data and show dialog if there's existing data
+          setPendingFileData(data);
+          setIsUploading(false);
+          
+          if (uploadedData.length > 0) {
+            setShowUploadDialog(true);
+          } else {
+            // No existing data, just upload directly
+            await handleAddData(data);
+          }
+          
+          // Clear file input
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        } catch (parseError) {
+          console.error("Error parsing Excel:", parseError);
+          toast.error("Failed to parse Excel file");
+          setIsUploading(false);
+        }
+      };
+      reader.readAsBinaryString(file);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      toast.error("Failed to upload file");
+      setIsUploading(false);
+    }
+  };
+
+  // Replace all existing data with new data
+  const handleReplaceData = async (data: any[]) => {
+    setIsUploading(true);
+    setShowUploadDialog(false);
+    try {
+      // Delete all existing records
+      const deletePromises = uploadedData.map(record => 
+        deleteDoc(doc(db, "ims_internships", record.id))
+      );
+      await Promise.all(deletePromises);
+
+      // Add new records
+      const batch: any[] = [];
+      for (const record of data) {
+        const docRef = await addDoc(collection(db, "ims_internships"), record);
+        batch.push({ id: docRef.id, ...(record as object) });
+      }
+
+      setUploadedData(batch);
+      toast.success(`Successfully replaced data with ${data.length} new records`);
+    } catch (error) {
+      console.error("Error replacing data:", error);
+      toast.error("Failed to replace data");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Add new data to existing data
+  const handleAddData = async (data: any[]) => {
+    setIsUploading(true);
+    setShowUploadDialog(false);
+    try {
+      const batch: any[] = [];
+      for (const record of data) {
+        const docRef = await addDoc(collection(db, "ims_internships"), record);
+        batch.push({ id: docRef.id, ...(record as object) });
+      }
+
+      setUploadedData(prev => [...batch, ...prev]);
+      toast.success(`Successfully added ${data.length} new records`);
+    } catch (error) {
+      console.error("Error adding data:", error);
+      toast.error("Failed to add data");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (uploadedData.length === 0) {
+      toast.error("No data to download");
+      return;
+    }
+
+    // Prepare data for Excel export
+    const exportData = uploadedData.map(({ id, ...rest }) => rest);
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "IMS Internships");
+    
+    // Generate filename with current date
+    const date = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `IMS_Internships_${date}.xlsx`);
+    toast.success("Data downloaded successfully");
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "ims_internships", id));
+      setUploadedData(prev => prev.filter(item => item.id !== id));
+      toast.success("Record deleted successfully");
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      toast.error("Failed to delete record");
+    }
+  };
+
+  return (
+    <>
+      {/* Upload Mode Selection Dialog */}
+      <AlertDialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upload Options</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {uploadedData.length} existing records. You are uploading {pendingFileData.length} new records.
+              <br /><br />
+              Would you like to:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li><strong>Replace All Data:</strong> Delete all existing records and upload new ones</li>
+                <li><strong>Add to Existing:</strong> Keep existing records and add new ones</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowUploadDialog(false);
+              setPendingFileData([]);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={() => handleReplaceData(pendingFileData)}
+              disabled={isUploading}
+            >
+              Replace All Data
+            </Button>
+            <AlertDialogAction
+              onClick={() => handleAddData(pendingFileData)}
+              disabled={isUploading}
+            >
+              Add to Existing
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">IMS Uploads</h2>
+          <p className="text-sm text-muted-foreground">
+            Upload and manage internship records from Excel files
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={handleDownload} variant="outline" disabled={uploadedData.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Download Excel
+          </Button>
+        </div>
+      </div>
+
+      {/* Upload Section */}
+      <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+        <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Upload className="h-4 w-4" /> Upload Excel File
+        </h3>
+        <div className="space-y-4">
+          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              disabled={isUploading}
+              className="hidden"
+              id="excel-upload"
+            />
+            <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-foreground font-medium mb-3">
+              {isUploading ? "Uploading..." : "Upload Excel File"}
+            </p>
+            <Button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              type="button"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Choose File
+            </Button>
+            <p className="text-sm text-muted-foreground mt-3">
+              Supports .xlsx and .xls files
+            </p>
+          </div>
+          
+          <div className="bg-muted/50 rounded-lg p-4">
+            <p className="text-sm font-medium text-foreground mb-2">Required Excel Columns:</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <div>• Academic Year</div>
+              <div>• Student Name</div>
+              <div>• Roll Number</div>
+              <div>• Branch</div>
+              <div>• Division</div>
+              <div>• Year of Study</div>
+              <div>• Number of Days of Internship</div>
+              <div>• Internship Start Date</div>
+              <div>• Internship End Date</div>
+              <div>• Organization Name</div>
+              <div>• Organization Address</div>
+              <div>• Internship Report</div>
+              <div>• Internship Completion Certificate</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Data Table */}
+      <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+        <h3 className="font-semibold text-foreground mb-4">
+          Uploaded Records ({uploadedData.length})
+        </h3>
+        {uploadedData.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Academic Year</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Student Name</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Roll Number</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Branch</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Organization</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Duration (Days)</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Start Date</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">End Date</th>
+                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {uploadedData.map((record) => (
+                  <tr key={record.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                    <td className="py-3 px-4 text-sm text-foreground">{record['Academic Year']}</td>
+                    <td className="py-3 px-4 text-sm text-foreground">{record['Student Name']}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Roll Number']}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Branch']}</td>
+                    <td className="py-3 px-4 text-sm text-foreground">{record['Organization Name']}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Number of Days of Internship']}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Internship Start Date']}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Internship End Date']}</td>
+                    <td className="py-3 px-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                        onClick={() => handleDelete(record.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+            No data uploaded yet. Upload an Excel file to get started.
+          </div>
+        )}
+      </div>
+    </div>
+    </>
+  );
+};
+
+// IMS Reports Tab Component
+const IMSReportsTab = () => {
+  const [imsData, setImsData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchIMSData = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "ims_internships"));
+        const data = querySnapshot.docs.map(doc => doc.data());
+        setImsData(data);
+      } catch (error) {
+        console.error("Error fetching IMS data:", error);
+        toast.error("Failed to load IMS data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchIMSData();
+  }, []);
+
+  const downloadReport = async () => {
+    if (!reportRef.current) {
+      toast.error("Report not ready");
+      return;
+    }
+    
+    toast.info("Generating PDF report...");
+    
+    try {
+      // Wait a bit for charts to fully render
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const canvas = await html2canvas(reportRef.current, { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      // If content is longer than one page, add multiple pages
+      if (pdfHeight > pdf.internal.pageSize.getHeight()) {
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        let heightLeft = pdfHeight;
+        let position = 0;
+        
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+        
+        while (heightLeft > 0) {
+          position = heightLeft - pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+        }
+      } else {
+        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      }
+      
+      const date = new Date().toISOString().split('T')[0];
+      pdf.save(`IMS_Report_${date}.pdf`);
+      toast.success("Report downloaded successfully");
+    } catch (err) {
+      console.error("PDF Gen Error:", err);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
+  // Calculate statistics
+  const stats = {
+    totalStudents: imsData.length,
+    totalDays: imsData.reduce((sum, item) => sum + (Number(item['Number of Days of Internship']) || 0), 0),
+    avgDays: imsData.length > 0 ? Math.round(imsData.reduce((sum, item) => sum + (Number(item['Number of Days of Internship']) || 0), 0) / imsData.length) : 0,
+    uniqueBranches: new Set(imsData.map(item => item['Branch'])).size,
+    uniqueOrganizations: new Set(imsData.map(item => item['Organization Name'])).size,
+  };
+
+  // Branch-wise distribution
+  const branchData = Object.entries(
+    imsData.reduce((acc: any, item) => {
+      const branch = item['Branch'] || 'Unknown';
+      acc[branch] = (acc[branch] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([branch, count]) => ({ branch, count })).sort((a, b) => (b.count as number) - (a.count as number));
+
+  // Year of Study distribution  
+  const yearData = Object.entries(
+    imsData.reduce((acc: any, item) => {
+      const year = item['Year of Study'] || 'Unknown';
+      acc[year] = (acc[year] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([year, count]) => ({ name: year, value: count as number }));
+
+  // Academic Year distribution
+  const academicYearData = Object.entries(
+    imsData.reduce((acc: any, item) => {
+      const year = item['Academic Year'] || 'Unknown';
+      acc[year] = (acc[year] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([year, count]) => ({ year, count })).sort((a, b) => String(a.year).localeCompare(String(b.year)));
+
+  // Top Organizations
+  const organizationData = Object.entries(
+    imsData.reduce((acc: any, item) => {
+      const org = item['Organization Name'] || 'Unknown';
+      acc[org] = (acc[org] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([organization, count]) => ({ organization, count: count as number }))
+    .sort((a, b) => (b.count as number) - (a.count as number))
+    .slice(0, 10);
+
+  const COLORS = ["#1e3a5f", "#2d5a87", "#4a7dad", "#6b9dc7", "#8ebde0", "#a8d5f7"];
+
+  if (isLoading) {
+    return <div className="text-center py-10">Loading report data...</div>;
+  }
+
+  if (imsData.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <p className="text-lg font-semibold mb-2">No Data Available</p>
+        <p>Upload IMS data in the "IMS Uploads" tab to view reports</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">IMS Reports</h2>
+          <p className="text-sm text-muted-foreground">
+            Visual analytics and insights from internship management data
+          </p>
+        </div>
+        <Button onClick={downloadReport}>
+          <Download className="h-4 w-4 mr-2" />
+          Download PDF Report
+        </Button>
+      </div>
+
+      {/* Report Content */}
+      <div ref={reportRef} className="space-y-8 bg-white p-8 rounded-lg" style={{ minWidth: '800px' }}>
+        {/* Header for PDF */}
+        <div className="text-center border-b-2 border-gray-300 pb-6">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">IMS Internship Report</h1>
+          <p className="text-gray-600">Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <p className="text-gray-500 text-sm mt-1">Total Records: {imsData.length}</p>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border-2 border-blue-200 text-center">
+            <p className="text-sm font-medium text-gray-700 mb-2">Total Students</p>
+            <p className="text-4xl font-bold text-blue-700">{stats.totalStudents}</p>
+          </div>
+          <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border-2 border-green-200 text-center">
+            <p className="text-sm font-medium text-gray-700 mb-2">Total Days</p>
+            <p className="text-4xl font-bold text-green-700">{stats.totalDays}</p>
+          </div>
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border-2 border-purple-200 text-center">
+            <p className="text-sm font-medium text-gray-700 mb-2">Avg Days</p>
+            <p className="text-4xl font-bold text-purple-700">{stats.avgDays}</p>
+          </div>
+          <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-6 rounded-xl border-2 border-pink-200 text-center">
+            <p className="text-sm font-medium text-gray-700 mb-2">Organizations</p>
+            <p className="text-4xl font-bold text-pink-700">{stats.uniqueOrganizations}</p>
+          </div>
+        </div>
+
+        {/* Charts Section */}
+        <div className="space-y-8">
+          {/* Two Column Charts */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Academic Year Distribution */}
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Academic Year Distribution</h3>
+              <div style={{ width: '100%', height: '350px' }}>
+                <ResponsiveContainer>
+                  <BarChart data={academicYearData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="year" tick={{ fill: '#374151' }} />
+                    <YAxis tick={{ fill: '#374151' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                    <Bar dataKey="count" fill="#4a7dad" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Year of Study Pie Chart */}
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Year of Study Distribution</h3>
+              <div style={{ width: '100%', height: '350px' }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={yearData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      label={(entry) => `${entry.name}: ${entry.value}`}
+                      outerRadius={120}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {yearData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Organizations */}
+          <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">Top 10 Partner Organizations</h3>
+            <div style={{ width: '100%', height: '400px' }}>
+              <ResponsiveContainer>
+                <BarChart data={organizationData} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis type="number" tick={{ fill: '#374151' }} />
+                  <YAxis dataKey="organization" type="category" width={140} tick={{ fill: '#374151', fontSize: 11 }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd' }} />
+                  <Bar dataKey="count" fill="#6b9dc7" radius={[0, 8, 8, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Table */}
+        <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Summary Statistics</h3>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-300">
+                <th className="text-left py-4 px-4 font-bold text-gray-900">Metric</th>
+                <th className="text-left py-4 px-4 font-bold text-gray-900">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-gray-200 hover:bg-gray-100">
+                <td className="py-4 px-4 text-gray-700">Total Students Completed Internships</td>
+                <td className="py-4 px-4 font-bold text-gray-900">{stats.totalStudents}</td>
+              </tr>
+              <tr className="border-b border-gray-200 hover:bg-gray-100">
+                <td className="py-4 px-4 text-gray-700">Total Internship Days (Cumulative)</td>
+                <td className="py-4 px-4 font-bold text-gray-900">{stats.totalDays} days</td>
+              </tr>
+              <tr className="border-b border-gray-200 hover:bg-gray-100">
+                <td className="py-4 px-4 text-gray-700">Average Duration per Student</td>
+                <td className="py-4 px-4 font-bold text-gray-900">{stats.avgDays} days</td>
+              </tr>
+              <tr className="border-b border-gray-200 hover:bg-gray-100">
+                <td className="py-4 px-4 text-gray-700">Number of Unique Branches</td>
+                <td className="py-4 px-4 font-bold text-gray-900">{stats.uniqueBranches}</td>
+              </tr>
+              <tr className="hover:bg-gray-100">
+                <td className="py-4 px-4 text-gray-700">Number of Partner Organizations</td>
+                <td className="py-4 px-4 font-bold text-gray-900">{stats.uniqueOrganizations}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center text-gray-500 text-sm border-t-2 border-gray-300 pt-6">
+          <p>This report was automatically generated by the Internship Management System</p>
+          <p className="mt-1">Department of Computer Engineering</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// AlumniTab Component
+const AlumniTab = () => {
+  const { data: alumniDirectory = [], isLoading: alumniLoading } = useAlumni();
+  const [alumniSearchQuery, setAlumniSearchQuery] = useState("");
+
+  const filteredAlumni = alumniDirectory.filter(
+    (alumni) =>
+      alumni.name.toLowerCase().includes(alumniSearchQuery.toLowerCase()) ||
+      alumni.company.toLowerCase().includes(alumniSearchQuery.toLowerCase()) ||
+      alumni.role.toLowerCase().includes(alumniSearchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold text-foreground">Alumni Directory</h2>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Search alumni..."
+            value={alumniSearchQuery}
+            onChange={(e) => setAlumniSearchQuery(e.target.value)}
+            className="max-w-xs"
+          />
+        </div>
+      </div>
+
+      {alumniLoading ? (
+        <div className="text-center py-10">Loading alumni data...</div>
+      ) : filteredAlumni.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+          No alumni found matching your search.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredAlumni.map((alumni) => (
+            <AlumniCard key={alumni.id} {...alumni} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AdminDashboard = () => {
   const placementStatuses = ["All Status", "Ongoing", "Completed", "Applied"];
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedYear, setSelectedYear] = useState("All Years");
@@ -505,7 +1222,7 @@ const TestimonialsTab = () => {
     },
     {
       value: "analytics",
-      label: "Analytics",
+      label: "Placement Stats",
       icon: <BarChart3 className="h-4 w-4" />,
     },
     {
@@ -519,9 +1236,24 @@ const TestimonialsTab = () => {
       icon: <Calendar className="h-4 w-4" />,
     },
     {
+      value: "alumni",
+      label: "Alumni Directory",
+      icon: <GraduationCap className="h-4 w-4" />,
+    },
+    {
       value: "placement-records",
-      label: "Records & Upload",
+      label: "Placement Records",
       icon: <FileSpreadsheet className="h-4 w-4" />,
+    },
+    {
+      value: "ims-uploads",
+      label: "IMS Uploads",
+      icon: <Upload className="h-4 w-4" />,
+    },
+    {
+      value: "ims-reports",
+      label: "IMS Reports",
+      icon: <BarChart3 className="h-4 w-4" />,
     },
     {
       value: "testimonials",
@@ -821,6 +1553,12 @@ const TestimonialsTab = () => {
                     availableYears={availableYears}
                     showBreakdown={true}
                 />
+                
+                {/* Footer */}
+                <div className="text-center text-gray-500 text-sm border-t-2 border-gray-300 pt-6 mt-8">
+                  <p>This report was automatically generated by the Internship Management System</p>
+                  <p className="mt-1">Department of Computer Engineering</p>
+                </div>
             </div>
 
           </div>
@@ -925,8 +1663,17 @@ const TestimonialsTab = () => {
         {/* Drives Tab */}
         {activeTab === "drives" && <DrivesTab />}
 
+        {/* Alumni Directory Tab */}
+        {activeTab === "alumni" && <AlumniTab />}
+
         {/* Placement Records Tab */}
         {activeTab === "placement-records" && <PlacementRecordsTab />}
+
+        {/* IMS Uploads Tab */}
+        {activeTab === "ims-uploads" && <IMSUploadsTab />}
+
+        {/* IMS Reports Tab */}
+        {activeTab === "ims-reports" && <IMSReportsTab />}
 
         {/* Testimonials */}
         {activeTab === "testimonials" && <TestimonialsTab />}

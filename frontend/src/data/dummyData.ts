@@ -44,32 +44,36 @@ export const testimonials = [
 
 // Team Members
 export const teamMembers = {
-  hod: {
-    name: "Dr.M. Kiruthika",
-    designation: "Head of Department - Computer Engineering",
-    email: "m.kiruthika@fcrit.ac.in",
-    phone: "+91 22 1234 5679",
-  },
-  tpo: {
-    name: "Dr. Mahendra Rane",
-    designation: "Training & Placement Officer",
-    email: "tpo@fcrit.ac.in",
-    phone: "+91 9819072834",
-  },
   coordinators: [
     {
       name: "Prof. Prachi Verma",
+      pronouns: "she/her",
       designation: "Assistant Placement Officer",
       email: "prachi.verma@fcrit.ac.in",
       phone: "+91 8839560208",
     },
     {
       name: "Prof. Mritunjay Ojha",
+      pronouns: "he/him",
       designation: "Assistant Placement Officer",
       email: "mritunjay.ojha@fcrit.ac.in",
       phone: "+91 9987800789",
     },
   ],
+  tpo: {
+    name: "Dr. Mahendra Rane",
+    pronouns: "he/him",
+    designation: "Training & Placement Officer",
+    email: "tpo@fcrit.ac.in",
+    phone: "+91 9819072834",
+  },
+  hod: {
+    name: "Dr. M. Kiruthika",
+    pronouns: "she/her",
+    designation: "Head of Department - Computer Engineering",
+    email: "m.kiruthika@fcrit.ac.in",
+    phone: "+91 22 1234 5679",
+  },
 };
 
 // Alumni Directory
@@ -125,24 +129,13 @@ export const alumniDirectory = [
 ];
 
 // Internship statuses
-export const internshipStatuses = ["Pending", "Ongoing", "Completed"];
+export const internshipStatuses = ["Applied", "Ongoing"];
 
 // Internship Data
 export const internships = [
+
   {
     id: 1,
-    studentName: "Arjun Malhotra",
-    rollNo: "CE2024001",
-    company: "TCS",
-    role: "Software Development Intern",
-    domain: "Web Development",
-    duration: "3 months",
-    status: "Completed",
-    category: "Internship",
-    type: "On-campus",
-  },
-  {
-    id: 2,
     studentName: "Meera Joshi",
     rollNo: "CE2024002",
     company: "Wipro",
@@ -152,33 +145,28 @@ export const internships = [
     status: "Ongoing",
     category: "Internship",
     type: "Off-campus",
+    internshipType: "Paid",
+    stipendAmount: 20000,
+    stipendCurrency: "INR",
   },
+
   {
-    id: 3,
-    studentName: "Rohit Sharma",
-    rollNo: "CE2024003",
-    company: "Infosys",
-    role: "ML Engineer Intern",
-    domain: "Machine Learning",
-    duration: "4 months",
-    status: "Completed",
-    category: "Internship",
-    type: "On-campus",
-  },
-  {
-    id: 4,
+    id: 2,
     studentName: "Anjali Nair",
     rollNo: "CE2024004",
     company: "Accenture",
     role: "Cloud Intern",
     domain: "Cloud Computing",
     duration: "3 months",
-    status: "Pending",
+    status: "Applied",
     category: "Internship",
     type: "Off-campus",
+    internshipType: "Unpaid",
+    stipendAmount: 0,
+    stipendCurrency: "INR",
   },
   {
-    id: 5,
+    id: 3,
     studentName: "Karan Patel",
     rollNo: "CE2024005",
     company: "IBM",
@@ -188,6 +176,9 @@ export const internships = [
     status: "Ongoing",
     category: "Placement",
     type: "On-campus",
+    internshipType: "Paid",
+    stipendAmount: 25000,
+    stipendCurrency: "INR",
   },
 ];
 
@@ -262,3 +253,28 @@ export const domains = [
   "Cybersecurity",
 ];
 
+// Exam Types for Competitive Exams
+export const examTypes = ["GRE", "TOEFL", "GATE", "CAT", "IELTS", "GMAT"];
+
+// Currency options for stipend
+export const currencies = ["INR", "USD", "EUR", "GBP"];
+
+// Competitive Exams Sample Data
+export const competitiveExams = [
+  {
+    id: 1,
+    studentName: "Arjun Malhotra",
+    examType: "GRE",
+    score: "320",
+    examDate: "2024-05-15",
+    validityPeriod: "2029-05-15",
+  },
+  {
+    id: 2,
+    studentName: "Meera Joshi",
+    examType: "TOEFL",
+    score: "110",
+    examDate: "2024-06-20",
+    validityPeriod: "2026-06-20",
+  },
+];

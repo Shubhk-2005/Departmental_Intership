@@ -1,0 +1,18 @@
+# Enable URL Rewriting
+RewriteEngine On
+
+# Handle Authorization Header
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+
+# If the request is for a real file or directory, serve it directly
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+
+# Otherwise, route everything to index.php
+RewriteRule ^ index.php [QSA,L]
+
+# Set PHP settings for file uploads
+php_value upload_max_filesize 10M
+php_value post_max_size 12M
+php_value max_execution_time 60
