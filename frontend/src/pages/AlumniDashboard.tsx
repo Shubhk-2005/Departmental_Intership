@@ -9,7 +9,7 @@ import { examTypes, currencies } from "@/data/dummyData";
 import { useAlumni, useMyAlumniProfile, useCreateAlumniProfile, useUpdateAlumniProfile } from "@/hooks/useAlumni";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, onSnapshot } from "firebase/firestore";
 import {
   LayoutDashboard,
   UserCircle,
@@ -38,7 +38,7 @@ import { api } from "@/services/api.service";
 
 const AlumniDashboard = () => {
   // Hooks
-  const { userData } = useAuth();
+  const { userData, user } = useAuth();
   const { data: alumniDirectory = [], isLoading: alumniLoading } = useAlumni();
   const { data: myProfile, isLoading: profileLoading } = useMyAlumniProfile();
   const createProfile = useCreateAlumniProfile();
@@ -48,7 +48,7 @@ const AlumniDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isHigherStudies, setIsHigherStudies] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
@@ -65,7 +65,7 @@ const AlumniDashboard = () => {
     higherStudiesCountry: "",
     lorFacultyName: "",
   });
-  
+
   // File upload states
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [studentIdFile, setStudentIdFile] = useState<File | null>(null);
@@ -74,53 +74,82 @@ const AlumniDashboard = () => {
 
   // Stats State
   const [stats, setStats] = useState({
-      placed: 0,
-      totalEligible: 0,
-      percentage: 0,
-      higherStudies: 0
+    placed: 0,
+    totalEligible: 0,
+    percentage: 0,
+    higherStudies: 0
   });
   const [selectedYear, setSelectedYear] = useState("All Years");
   const [availableYears, setAvailableYears] = useState<string[]>([]);
+  // Competitive Exams State
+  const [exams, setExams] = useState<any[]>([]);
+  const [examForm, setExamForm] = useState({
+    examType: "",
+    score: "",
+    examDate: "",
+    validityPeriod: ""
+  });
+
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
 
   useEffect(() => {
-      const fetchStats = async () => {
-          try {
-              const recordsRef = collection(db, "placement_stats_yearly");
-              const snapshot = await getDocs(recordsRef);
-              const data = snapshot.docs.map(doc => doc.data());
-              
-              if (data.length === 0) return;
+    // Fetch user's competitive exams
+    if (!user?.uid) return;
 
-              // Store full data and available years
-              const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
-              setAvailableYears(years);
-              setAnalyticsData(data);
+    const q = query(
+      collection(db, "competitive_exams"),
+      where("userId", "==", user.uid)
+    );
 
-              // Filter Data based on selectedYear
-              let filteredData = data;
-              if (selectedYear !== "All Years") {
-                   filteredData = data.filter((d: any) => d.year === selectedYear);
-              }
+    const unsubscribeExams = onSnapshot(q, (snapshot) => {
+      const examsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setExams(examsData);
+    });
 
-              const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
-              const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
-              const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
-              
-              setStats({
-                  placed: placedCount,
-                  totalEligible: totalEligible,
-                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0,
-                  higherStudies: higherStudiesCount
-              });
-          } catch (error) {
-              console.error("Error fetching stats:", error);
-          }
-      };
+    return () => unsubscribeExams();
+  }, [userData]);
 
-      if (activeTab === "statistics") {
-        fetchStats();
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const recordsRef = collection(db, "placement_stats_yearly");
+        const snapshot = await getDocs(recordsRef);
+        const data = snapshot.docs.map(doc => doc.data());
+
+        if (data.length === 0) return;
+
+        // Store full data and available years
+        const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+        setAvailableYears(years);
+        setAnalyticsData(data);
+
+        // Filter Data based on selectedYear
+        let filteredData = data;
+        if (selectedYear !== "All Years") {
+          filteredData = data.filter((d: any) => d.year === selectedYear);
+        }
+
+        const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+        const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+        const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+
+        setStats({
+          placed: placedCount,
+          totalEligible: totalEligible,
+          percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0,
+          higherStudies: higherStudiesCount
+        });
+      } catch (error) {
+        console.error("Error fetching stats:", error);
       }
+    };
+
+    if (activeTab === "statistics") {
+      fetchStats();
+    }
   }, [activeTab, selectedYear]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,7 +157,7 @@ const AlumniDashboard = () => {
     if (file) {
       // Set file for upload
       setProfilePhotoFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -169,15 +198,15 @@ const AlumniDashboard = () => {
   // Handle form submission with file uploads
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       console.log('=== STARTING FORM SUBMISSION ===');
-      
+
       const fileUrls: any = {};
-      
+
       // Upload files to Firebase Storage via PHP API
       toast.info("Uploading files...");
-      
+
       // Upload profile photo
       if (profilePhotoFile) {
         console.log('Uploading profile photo...');
@@ -190,7 +219,7 @@ const AlumniDashboard = () => {
           toast.error('Failed to upload profile photo');
         }
       }
-      
+
       // Upload student ID
       if (studentIdFile) {
         console.log('Uploading student ID...');
@@ -203,7 +232,7 @@ const AlumniDashboard = () => {
           toast.error('Failed to upload student ID');
         }
       }
-      
+
       // Upload admit card
       if (admitCardFile) {
         console.log('Uploading admit card...');
@@ -216,7 +245,7 @@ const AlumniDashboard = () => {
           toast.error('Failed to upload admit card');
         }
       }
-      
+
       // Upload LOR
       if (lorFile) {
         console.log('Uploading LOR...');
@@ -229,9 +258,9 @@ const AlumniDashboard = () => {
           toast.error('Failed to upload LOR');
         }
       }
-      
+
       console.log('Preparing profile data...');
-      
+
       // Prepare profile data
       const profileData: any = {
         name: formData.name,
@@ -244,7 +273,7 @@ const AlumniDashboard = () => {
         userId: userData?.uid || "unknown",
         ...fileUrls,
       };
-      
+
       // Add Higher Studies fields if enabled
       if (formData.isHigherStudies) {
         profileData.isHigherStudies = true;
@@ -255,14 +284,14 @@ const AlumniDashboard = () => {
       } else {
         profileData.isHigherStudies = false;
       }
-      
+
       // Filter out empty values
       const cleanedData = Object.fromEntries(
         Object.entries(profileData).filter(([_, value]) => value !== undefined && value !== '')
       );
-      
+
       console.log('Submitting to API:', cleanedData);
-      
+
       if (myProfile?.id) {
         // Update existing profile
         console.log('Updating profile ID:', myProfile.id);
@@ -274,15 +303,15 @@ const AlumniDashboard = () => {
         await createProfile.mutateAsync(cleanedData);
         toast.success("Profile created successfully!");
       }
-      
+
       // Clear file states after successful upload
       setProfilePhotoFile(null);
       setStudentIdFile(null);
       setAdmitCardFile(null);
       setLorFile(null);
-      
+
       console.log('=== FORM SUBMISSION COMPLETE ===');
-      
+
     } catch (error: any) {
       console.error('=== PROFILE SAVE ERROR ===', error);
       console.error('Error details:', {
@@ -352,7 +381,7 @@ const AlumniDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               {myProfile ? "Update Your Profile" : "Create Your Profile"}
             </h2>
-            
+
             {profileLoading ? (
               <div className="text-center py-12">
                 <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
@@ -447,135 +476,135 @@ const AlumniDashboard = () => {
                   </div>
                 </div>
 
-              {/* Higher Studies Section */}
-              <div className="pt-4 border-t border-border">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">
-                      Pursuing Higher Studies (MS)?
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable this if you are pursuing a Master's degree
-                    </p>
-                  </div>
-                  <Switch
-                    checked={formData.isHigherStudies}
-                    onCheckedChange={(checked) => setFormData({ ...formData, isHigherStudies: checked })}
-                  />
-                </div>
-
-                {formData.isHigherStudies && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="space-y-2">
-                      <Label htmlFor="higherStudiesUniversity">University Name</Label>
-                      <Input
-                        id="higherStudiesUniversity"
-                        placeholder="e.g. Stanford University"
-                        value={formData.higherStudiesUniversity}
-                        onChange={(e) => setFormData({ ...formData, higherStudiesUniversity: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="higherStudiesProgram">Program/Degree</Label>
-                      <Input
-                        id="higherStudiesProgram"
-                        placeholder="e.g. MS in Computer Science"
-                        value={formData.higherStudiesProgram}
-                        onChange={(e) => setFormData({ ...formData, higherStudiesProgram: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="higherStudiesCountry">Country</Label>
-                      <Input
-                        id="higherStudiesCountry"
-                        placeholder="e.g. United States"
-                        value={formData.higherStudiesCountry}
-                        onChange={(e) => setFormData({ ...formData, higherStudiesCountry: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="studentIdFile">Student ID Card</Label>
-                      <Input 
-                        id="studentIdFile" 
-                        type="file" 
-                        accept=".pdf,.jpg,.jpeg,.png" 
-                        onChange={(e) => setStudentIdFile(e.target.files?.[0] || null)}
-                      />
-                      <p className="text-xs text-muted-foreground">Upload your student ID card</p>
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="admitCardFile">
-                        Admit Card / Offer Letter
+                {/* Higher Studies Section */}
+                <div className="pt-4 border-t border-border">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">
+                        Pursuing Higher Studies (MS)?
                       </Label>
-                      <Input
-                        id="admitCardFile"
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => setAdmitCardFile(e.target.files?.[0] || null)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Upload your admit card or offer letter
+                      <p className="text-sm text-muted-foreground">
+                        Enable this if you are pursuing a Master's degree
                       </p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lorFacultyName">LOR - Faculty Name</Label>
-                      <Input
-                        id="lorFacultyName"
-                        placeholder="Name of faculty who issued LOR"
-                        value={formData.lorFacultyName}
-                        onChange={(e) => setFormData({ ...formData, lorFacultyName: e.target.value })}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Faculty member who provided Letter of Recommendation
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lorFile">Upload LOR Document</Label>
-                      <Input
-                        id="lorFile"
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => setLorFile(e.target.files?.[0] || null)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Upload your Letter of Recommendation (PDF preferred)
-                      </p>
-                    </div>
+                    <Switch
+                      checked={formData.isHigherStudies}
+                      onCheckedChange={(checked) => setFormData({ ...formData, isHigherStudies: checked })}
+                    />
                   </div>
-                )}
-                
-                {!formData.isHigherStudies && (
-                  <p className="text-sm text-muted-foreground italic py-2">
-                    Not pursuing higher studies
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-3">
-                <Button type="submit" disabled={createProfile.isPending || updateProfile.isPending}>
-                  {createProfile.isPending || updateProfile.isPending ? "Saving..." : myProfile ? "Update Profile" : "Create Profile"}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline"
-                  onClick={() => myProfile && setFormData({
-                    name: myProfile.name,
-                    graduationYear: myProfile.graduationYear,
-                    company: myProfile.company,
-                    role: myProfile.role,
-                    linkedinUrl: myProfile.linkedinUrl || "",
-                    email: userData?.email || "",
-                    isPublic: myProfile.isPublic !== undefined ? myProfile.isPublic : true,
-                    isHigherStudies: myProfile.isHigherStudies || false,
-                    higherStudiesUniversity: myProfile.higherStudiesUniversity || "",
-                    higherStudiesProgram: myProfile.higherStudiesProgram || "",
-                    higherStudiesCountry: myProfile.higherStudiesCountry || "",
-                    lorFacultyName: myProfile.lorFacultyName || "",
-                  })}
-                >
-                  Reset Changes
-                </Button>
-              </div>
-            </form>
+
+                  {formData.isHigherStudies && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <div className="space-y-2">
+                        <Label htmlFor="higherStudiesUniversity">University Name</Label>
+                        <Input
+                          id="higherStudiesUniversity"
+                          placeholder="e.g. Stanford University"
+                          value={formData.higherStudiesUniversity}
+                          onChange={(e) => setFormData({ ...formData, higherStudiesUniversity: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="higherStudiesProgram">Program/Degree</Label>
+                        <Input
+                          id="higherStudiesProgram"
+                          placeholder="e.g. MS in Computer Science"
+                          value={formData.higherStudiesProgram}
+                          onChange={(e) => setFormData({ ...formData, higherStudiesProgram: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="higherStudiesCountry">Country</Label>
+                        <Input
+                          id="higherStudiesCountry"
+                          placeholder="e.g. United States"
+                          value={formData.higherStudiesCountry}
+                          onChange={(e) => setFormData({ ...formData, higherStudiesCountry: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="studentIdFile">Student ID Card</Label>
+                        <Input
+                          id="studentIdFile"
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => setStudentIdFile(e.target.files?.[0] || null)}
+                        />
+                        <p className="text-xs text-muted-foreground">Upload your student ID card</p>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="admitCardFile">
+                          Admit Card / Offer Letter
+                        </Label>
+                        <Input
+                          id="admitCardFile"
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => setAdmitCardFile(e.target.files?.[0] || null)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Upload your admit card or offer letter
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lorFacultyName">LOR - Faculty Name</Label>
+                        <Input
+                          id="lorFacultyName"
+                          placeholder="Name of faculty who issued LOR"
+                          value={formData.lorFacultyName}
+                          onChange={(e) => setFormData({ ...formData, lorFacultyName: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Faculty member who provided Letter of Recommendation
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lorFile">Upload LOR Document</Label>
+                        <Input
+                          id="lorFile"
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => setLorFile(e.target.files?.[0] || null)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Upload your Letter of Recommendation (PDF preferred)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!formData.isHigherStudies && (
+                    <p className="text-sm text-muted-foreground italic py-2">
+                      Not pursuing higher studies
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <Button type="submit" disabled={createProfile.isPending || updateProfile.isPending}>
+                    {createProfile.isPending || updateProfile.isPending ? "Saving..." : myProfile ? "Update Profile" : "Create Profile"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => myProfile && setFormData({
+                      name: myProfile.name,
+                      graduationYear: myProfile.graduationYear,
+                      company: myProfile.company,
+                      role: myProfile.role,
+                      linkedinUrl: myProfile.linkedinUrl || "",
+                      email: userData?.email || "",
+                      isPublic: myProfile.isPublic !== undefined ? myProfile.isPublic : true,
+                      isHigherStudies: myProfile.isHigherStudies || false,
+                      higherStudiesUniversity: myProfile.higherStudiesUniversity || "",
+                      higherStudiesProgram: myProfile.higherStudiesProgram || "",
+                      higherStudiesCountry: myProfile.higherStudiesCountry || "",
+                      lorFacultyName: myProfile.lorFacultyName || "",
+                    })}
+                  >
+                    Reset Changes
+                  </Button>
+                </div>
+              </form>
             )}
           </div>
         )}
@@ -589,13 +618,45 @@ const AlumniDashboard = () => {
             <p className="text-sm text-muted-foreground mb-6">
               Add your competitive exam scores (GRE/TOEFL/GATE/CAT/IELTS/GMAT)
             </p>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={async (e) => {
+              e.preventDefault();
+              if (!examForm.examType || !examForm.score || !examForm.examDate) {
+                toast.error("Please fill all required fields");
+                return;
+              }
+
+              try {
+                if (!user?.uid) {
+                  toast.error("User not authenticated");
+                  return;
+                }
+                await addDoc(collection(db, "competitive_exams"), {
+                  ...examForm,
+                  userId: user.uid,
+                  studentName: userData?.name || formData.name || user.displayName || "Unknown Alumni",
+                  role: "alumni",
+                  createdAt: new Date().toISOString()
+                });
+                toast.success("Exam score added successfully");
+                setExamForm({
+                  examType: "",
+                  score: "",
+                  examDate: "",
+                  validityPeriod: ""
+                });
+              } catch (error) {
+                console.error("Error adding exam:", error);
+                toast.error("Failed to add exam score");
+              }
+            }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="alumni_exam_type">Exam Type</Label>
                   <select
                     id="alumni_exam_type"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={examForm.examType}
+                    onChange={(e) => setExamForm({ ...examForm, examType: e.target.value })}
                   >
                     <option value="">Select exam type</option>
                     {examTypes.map((exam) => (
@@ -610,31 +671,37 @@ const AlumniDashboard = () => {
                   <Input
                     id="alumni_exam_score"
                     placeholder="e.g., 320 or 99.5%"
+                    value={examForm.score}
+                    onChange={(e) => setExamForm({ ...examForm, score: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="alumni_exam_date">Exam Date</Label>
-                  <Input id="alumni_exam_date" type="date" />
+                  <Input
+                    id="alumni_exam_date"
+                    type="date"
+                    value={examForm.examDate}
+                    onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="alumni_exam_validity">Valid Until</Label>
-                  <Input id="alumni_exam_validity" type="date" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="alumni_score_report">Score Report (Optional)</Label>
                   <Input
-                    id="alumni_score_report"
-                    type="file"
-                    accept=".pdf,.jpg,.png"
+                    id="alumni_exam_validity"
+                    type="date"
+                    value={examForm.validityPeriod}
+                    onChange={(e) => setExamForm({ ...examForm, validityPeriod: e.target.value })}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Upload your official score report
-                  </p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <Button type="submit">Add Exam Score</Button>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" onClick={() => setExamForm({
+                  examType: "",
+                  score: "",
+                  examDate: "",
+                  validityPeriod: ""
+                })}>
                   Clear Form
                 </Button>
               </div>
@@ -646,34 +713,32 @@ const AlumniDashboard = () => {
                 My Exam Scores
               </h3>
               <div className="space-y-3">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">GRE</h4>
-                      <p className="text-sm text-muted-foreground">Score: 320</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 15 May 2024 • Valid until: 15 May 2029
-                      </p>
+                {exams.map((exam) => (
+                  <div key={exam.id} className="bg-card border border-border rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-foreground">{exam.examType}</h4>
+                        <p className="text-sm text-muted-foreground">Score: {exam.score}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Date: {exam.examDate} {exam.validityPeriod ? `• Valid until: ${exam.validityPeriod}` : ''}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={async () => {
+                        try {
+                          await deleteDoc(doc(db, "competitive_exams", exam.id));
+                          toast.success("Exam score removed");
+                        } catch (error) {
+                          toast.error("Failed to remove exam score");
+                        }
+                      }}>
+                        Remove
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
                   </div>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">TOEFL</h4>
-                      <p className="text-sm text-muted-foreground">Score: 110</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 20 Jun 2024 • Valid until: 20 Jun 2026
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </div>
-                </div>
+                ))}
+                {exams.length === 0 && (
+                  <p className="text-muted-foreground text-sm">No exam scores added yet.</p>
+                )}
               </div>
             </div>
           </div>
@@ -719,71 +784,71 @@ const AlumniDashboard = () => {
         )}
         {/* Statistics Tab */}
         {activeTab === "statistics" && (
-            <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border border-border">
-                    <div>
-                        <h2 className="text-xl font-semibold text-foreground mb-1">
-                            Placement Statistics
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            Overall department performance
-                        </p>
-                    </div>
-                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                        <Select value={selectedYear} onValueChange={setSelectedYear}>
-                            <SelectTrigger className="w-[140px]">
-                                <SelectValue placeholder="Year" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="All Years">All Years</SelectItem>
-                                {availableYears.map((year) => (
-                                    <SelectItem key={year} value={year}>
-                                        {year}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Reset Filters"
-                            onClick={() => {
-                                setSelectedYear("All Years");
-                            }}
-                        >
-                            <Filter className="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <StatCard
-                        title="Total Students Placed"
-                        value={stats.placed}
-                        subtitle={`Out of ${stats.totalEligible} registered`}
-                        icon={<Users className="h-6 w-6" />}
-                    />
-                    <StatCard
-                        title="Success Rate"
-                        value={`${stats.percentage}%`}
-                        subtitle="Placement Rate"
-                        icon={<TrendingUp className="h-6 w-6" />}
-                        trend={{ value: "Aggregated", positive: true }}
-                    />
-                    <StatCard
-                        title="Higher Studies"
-                        value={stats.higherStudies}
-                        subtitle="Pursued Masters/PhD"
-                        icon={<Award className="h-6 w-6" />}
-                    />
-                </div>
-                <div className="mt-6">
-                    <PlacementAnalyticsCharts 
-                        data={analyticsData} // Pass full data
-                        selectedYear={selectedYear}
-                        availableYears={availableYears}
-                    />
-                </div>
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border border-border">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground mb-1">
+                  Placement Statistics
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Overall department performance
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All Years">All Years</SelectItem>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Reset Filters"
+                  onClick={() => {
+                    setSelectedYear("All Years");
+                  }}
+                >
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <StatCard
+                title="Total Students Placed"
+                value={stats.placed}
+                subtitle={`Out of ${stats.totalEligible} registered`}
+                icon={<Users className="h-6 w-6" />}
+              />
+              <StatCard
+                title="Success Rate"
+                value={`${stats.percentage}%`}
+                subtitle="Placement Rate"
+                icon={<TrendingUp className="h-6 w-6" />}
+                trend={{ value: "Aggregated", positive: true }}
+              />
+              <StatCard
+                title="Higher Studies"
+                value={stats.higherStudies}
+                subtitle="Pursued Masters/PhD"
+                icon={<Award className="h-6 w-6" />}
+              />
+            </div>
+            <div className="mt-6">
+              <PlacementAnalyticsCharts
+                data={analyticsData} // Pass full data
+                selectedYear={selectedYear}
+                availableYears={availableYears}
+              />
+            </div>
+          </div>
         )}
 
         {/* Settings */}

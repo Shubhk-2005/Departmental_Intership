@@ -21,7 +21,7 @@ import {
 import { useInternships, useCreateInternship } from "@/hooks/useInternships";
 import { useAlumni } from "@/hooks/useAlumni";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, where, onSnapshot, orderBy, addDoc, deleteDoc, doc } from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/services/api.service";
 
@@ -70,7 +71,7 @@ const StudentDashboard = () => {
   const { data: internships = [], isLoading: internshipsLoading } = useInternships();
   const { data: alumniDirectory = [], isLoading: alumniLoading } = useAlumni();
   const createInternship = useCreateInternship();
-  
+
   const [activeTab, setActiveTab] = useState("overview");
   const [showForm, setShowForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>("");
@@ -81,16 +82,26 @@ const StudentDashboard = () => {
   // Drives State
   const [drives, setDrives] = useState<any[]>([]);
   const [selectedDrive, setSelectedDrive] = useState<any>(null);
-  
+
+  // Competitive Exams State
+  const [exams, setExams] = useState<any[]>([]);
+  const [examForm, setExamForm] = useState({
+    examType: "",
+    score: "",
+    examDate: "",
+    validityPeriod: ""
+  });
+  const { userData, user } = useAuth();
+
   // Placement Stats Filter State
   const [selectedYear, setSelectedYear] = useState("All Years");
-  
+
   // Real Data State (Aggregated)
   const [dbStats, setDbStats] = useState({
-      placed: 0,
-      totalEligible: 0,
-      percentage: 0,
-      higherStudies: 0
+    placed: 0,
+    totalEligible: 0,
+    percentage: 0,
+    higherStudies: 0
   });
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [analyticsData, setAnalyticsData] = useState<any[]>([]); // Full data for charts
@@ -110,43 +121,63 @@ const StudentDashboard = () => {
   }, []);
 
   useEffect(() => {
-      const fetchStats = async () => {
-          try {
-              const recordsRef = collection(db, "placement_stats_yearly");
-              const snapshot = await getDocs(recordsRef);
-              const data = snapshot.docs.map(doc => doc.data());
-              
-              // Extract unique years
-              const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
-              setAvailableYears(years);
-              setAnalyticsData(data); // Store full data
+    // Fetch user's competitive exams
+    if (!user?.uid) return;
 
-              // Filter
-              let filteredData = data;
-              if (selectedYear !== "All Years") {
-                  filteredData = data.filter((d: any) => d.year === selectedYear);
-              }
+    const q = query(
+      collection(db, "competitive_exams"),
+      where("userId", "==", user.uid)
+    );
 
-              // Calculate Aggregated Stats
-              const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
-              const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
-              const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
-              
-              const totalSuccess = placedCount + higherStudiesCount;
-              
-              setDbStats({
-                  placed: placedCount,
-                  totalEligible: totalEligible,
-                  higherStudies: higherStudiesCount,
-                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0
-              });
+    const unsubscribeExams = onSnapshot(q, (snapshot) => {
+      const examsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setExams(examsData);
+    });
 
-          } catch (error) {
-              console.error("Error fetching stats:", error);
-          }
-      };
+    return () => unsubscribeExams();
+  }, [user]);
 
-      fetchStats();
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const recordsRef = collection(db, "placement_stats_yearly");
+        const snapshot = await getDocs(recordsRef);
+        const data = snapshot.docs.map(doc => doc.data());
+
+        // Extract unique years
+        const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+        setAvailableYears(years);
+        setAnalyticsData(data); // Store full data
+
+        // Filter
+        let filteredData = data;
+        if (selectedYear !== "All Years") {
+          filteredData = data.filter((d: any) => d.year === selectedYear);
+        }
+
+        // Calculate Aggregated Stats
+        const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+        const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+        const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+
+        const totalSuccess = placedCount + higherStudiesCount;
+
+        setDbStats({
+          placed: placedCount,
+          totalEligible: totalEligible,
+          higherStudies: higherStudiesCount,
+          percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0
+        });
+
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      }
+    };
+
+    fetchStats();
   }, [selectedYear]);
 
   const filteredStats = dbStats;
@@ -160,7 +191,7 @@ const StudentDashboard = () => {
         setProfileImage(reader.result as string);
       };
       reader.readAsDataURL(file);
-      
+
       // Upload to Firebase Storage
       try {
         toast.info("Uploading profile picture...");
@@ -233,188 +264,188 @@ const StudentDashboard = () => {
         {/* Overview */}
         {activeTab === "overview" && (
           <>
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Profile Summary Card */}
-              <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border">
-                    {profileImage ? (
-                      <img
-                        src={profileImage}
-                        alt="Profile"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-2xl font-bold text-primary">
-                        AM
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Profile Summary Card */}
+                <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-border">
+                      {profileImage ? (
+                        <img
+                          src={profileImage}
+                          alt="Profile"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-2xl font-bold text-primary">
+                          AM
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground">
+                        Arjun Malhotra
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Roll No: CE2024001
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Computer Engineering
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center py-2 border-b border-border">
+                      <span className="text-sm text-muted-foreground">CGPA</span>
+                      <span className="font-medium text-foreground">8.9</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-border">
+                      <span className="text-sm text-muted-foreground">Batch</span>
+                      <span className="font-medium text-foreground">2024</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-border">
+                      <span className="text-sm text-muted-foreground">
+                        Status
                       </span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg text-foreground">
-                      Arjun Malhotra
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Roll No: CE2024001
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Computer Engineering
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">CGPA</span>
-                    <span className="font-medium text-foreground">8.9</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">Batch</span>
-                    <span className="font-medium text-foreground">2024</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border">
-                    <span className="text-sm text-muted-foreground">
-                      Status
-                    </span>
-                    <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-success/10 text-success">
-                      Placed
-                    </span>
-                  </div>
-                  <Button className="w-full mt-2" variant="outline">
-                    View Full Profile
-                  </Button>
-                </div>
-              </div>
-
-              {/* Quick Stats & Notifications */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Quick Stats Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
-                    <p className="text-sm text-muted-foreground">
-                      Applications
-                    </p>
-                    <p className="text-2xl font-bold text-foreground mt-1">
-                      12
-                    </p>
-                  </div>
-                  <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
-                    <p className="text-sm text-muted-foreground">Interviews</p>
-                    <p className="text-2xl font-bold text-foreground mt-1">4</p>
-                  </div>
-                  <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
-                    <p className="text-sm text-muted-foreground">Offers</p>
-                    <p className="text-2xl font-bold text-foreground mt-1">1</p>
+                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-success/10 text-success">
+                        Placed
+                      </span>
+                    </div>
+                    <Button className="w-full mt-2" variant="outline">
+                      View Full Profile
+                    </Button>
                   </div>
                 </div>
 
-                {/* Notifications & Upcoming Drives */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Notifications */}
-                  <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                      Recent Notifications
-                    </h3>
-                    <div className="space-y-4">
-                      {[
-                        {
-                          title: "TCS Interview Scheduled",
-                          time: "2 hours ago",
-                        },
-                        {
-                          title: "New Drive: Infosys Added",
-                          time: "1 day ago",
-                        },
-                        { title: "Resume Verified", time: "2 days ago" },
-                      ].map((note, i) => (
-                        <div
-                          key={i}
-                          className="flex justify-between items-start pb-3 border-b border-border last:border-0 last:pb-0"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {note.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {note.time}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                {/* Quick Stats & Notifications */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Quick Stats Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
+                      <p className="text-sm text-muted-foreground">
+                        Applications
+                      </p>
+                      <p className="text-2xl font-bold text-foreground mt-1">
+                        12
+                      </p>
+                    </div>
+                    <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
+                      <p className="text-sm text-muted-foreground">Interviews</p>
+                      <p className="text-2xl font-bold text-foreground mt-1">4</p>
+                    </div>
+                    <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
+                      <p className="text-sm text-muted-foreground">Offers</p>
+                      <p className="text-2xl font-bold text-foreground mt-1">1</p>
                     </div>
                   </div>
 
-                  {/* Upcoming Drives */}
-                  <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-                    <h3 className="font-semibold text-foreground mb-4">
-                      Upcoming Drives ({drives.length})
-                    </h3>
-                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                      {drives.map((drive) => (
-                        <div
-                          key={drive.id}
-                          className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0 cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
-                          onClick={() => setSelectedDrive(drive)}
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {drive.company}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {drive.role}
-                            </p>
+                  {/* Notifications & Upcoming Drives */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Notifications */}
+                    <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+                      <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                        Recent Notifications
+                      </h3>
+                      <div className="space-y-4">
+                        {[
+                          {
+                            title: "TCS Interview Scheduled",
+                            time: "2 hours ago",
+                          },
+                          {
+                            title: "New Drive: Infosys Added",
+                            time: "1 day ago",
+                          },
+                          { title: "Resume Verified", time: "2 days ago" },
+                        ].map((note, i) => (
+                          <div
+                            key={i}
+                            className="flex justify-between items-start pb-3 border-b border-border last:border-0 last:pb-0"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {note.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {note.time}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
-                              {drive.date}
-                            </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Upcoming Drives */}
+                    <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+                      <h3 className="font-semibold text-foreground mb-4">
+                        Upcoming Drives ({drives.length})
+                      </h3>
+                      <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                        {drives.map((drive) => (
+                          <div
+                            key={drive.id}
+                            className="flex justify-between items-center pb-3 border-b border-border last:border-0 last:pb-0 cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                            onClick={() => setSelectedDrive(drive)}
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {drive.company}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {drive.role}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs bg-secondary px-2 py-1 rounded text-secondary-foreground">
+                                {drive.date}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                      {drives.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-4">No upcoming drives.</p>
-                      )}
+                        ))}
+                        {drives.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-4">No upcoming drives.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <Dialog open={!!selectedDrive} onOpenChange={(open) => !open && setSelectedDrive(null)}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-xl">
-                  {selectedDrive?.company}
-                </DialogTitle>
-                <DialogDescription>
-                  Detailed information about this Drive.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="space-y-4 py-4">
-                 <div className="flex items-center gap-2 text-muted-foreground">
+            <Dialog open={!!selectedDrive} onOpenChange={(open) => !open && setSelectedDrive(null)}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-xl">
+                    {selectedDrive?.company}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Detailed information about this Drive.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Briefcase className="h-4 w-4" />
                     <span className="font-medium text-foreground">{selectedDrive?.role}</span>
-                 </div>
-                 <div className="flex items-center gap-2 text-muted-foreground">
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-4 w-4" />
                     <span className="font-medium text-foreground">{selectedDrive?.date}</span>
-                 </div>
-                 
-                 <div className="bg-muted/30 p-4 rounded-lg border border-border mt-4">
+                  </div>
+
+                  <div className="bg-muted/30 p-4 rounded-lg border border-border mt-4">
                     <h4 className="text-sm font-semibold mb-2">Description & Eligibility</h4>
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                        {selectedDrive?.description || "No additional details provided."}
+                      {selectedDrive?.description || "No additional details provided."}
                     </p>
-                 </div>
-              </div>
+                  </div>
+                </div>
 
-               <div className="flex justify-end gap-2">
-                 <Button variant="outline" onClick={() => setSelectedDrive(null)}>Close</Button>
-               </div>
-            </DialogContent>
-          </Dialog>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setSelectedDrive(null)}>Close</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </>
         )}
 
@@ -611,7 +642,7 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               My Opportunities
             </h2>
-            
+
             {internshipsLoading ? (
               <div className="text-center py-12">
                 <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
@@ -668,22 +699,20 @@ const StudentDashboard = () => {
                         </td>
                         <td className="py-3 px-4 text-muted-foreground">
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              intern.type === "On-campus"
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${intern.type === "On-campus"
                                 ? "bg-blue-100 text-blue-700"
                                 : "bg-purple-100 text-purple-700"
-                            }`}
+                              }`}
                           >
                             {intern.type || "Off-campus"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              intern.status === "Ongoing"
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${intern.status === "Ongoing"
                                 ? "bg-info/10 text-info"
                                 : "bg-warning/10 text-warning"
-                            }`}
+                              }`}
                           >
                             {intern.status}
                           </span>
@@ -703,11 +732,41 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               Add Competitive Exam Score
             </h2>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={async (e) => {
+              e.preventDefault();
+              if (!examForm.examType || !examForm.score || !examForm.examDate) {
+                toast.error("Please fill all required fields");
+                return;
+              }
+
+              try {
+                if (!user?.uid) {
+                  toast.error("User not authenticated");
+                  return;
+                }
+                await addDoc(collection(db, "competitive_exams"), {
+                  ...examForm,
+                  userId: user.uid,
+                  studentName: userData?.name || user.displayName || "Unknown",
+                  role: "student",
+                  createdAt: new Date().toISOString()
+                });
+                toast.success("Exam score added successfully");
+                setExamForm({
+                  examType: "",
+                  score: "",
+                  examDate: "",
+                  validityPeriod: ""
+                });
+              } catch (error) {
+                console.error("Error adding exam:", error);
+                toast.error("Failed to add exam score");
+              }
+            }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="examType">Exam Type</Label>
-                  <Select>
+                  <Select onValueChange={(val) => setExamForm({ ...examForm, examType: val })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select exam" />
                     </SelectTrigger>
@@ -725,31 +784,37 @@ const StudentDashboard = () => {
                   <Input
                     id="score"
                     placeholder="e.g., 320 or 99.5%"
+                    value={examForm.score}
+                    onChange={(e) => setExamForm({ ...examForm, score: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="examDate">Exam Date</Label>
-                  <Input id="examDate" type="date" />
+                  <Input
+                    id="examDate"
+                    type="date"
+                    value={examForm.examDate}
+                    onChange={(e) => setExamForm({ ...examForm, examDate: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="validityPeriod">Valid Until</Label>
-                  <Input id="validityPeriod" type="date" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="scoreReport">Score Report (Optional)</Label>
                   <Input
-                    id="scoreReport"
-                    type="file"
-                    accept=".pdf,.jpg,.png"
+                    id="validityPeriod"
+                    type="date"
+                    value={examForm.validityPeriod}
+                    onChange={(e) => setExamForm({ ...examForm, validityPeriod: e.target.value })}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Upload your official score report
-                  </p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <Button type="submit">Add Exam Score</Button>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" onClick={() => setExamForm({
+                  examType: "",
+                  score: "",
+                  examDate: "",
+                  validityPeriod: ""
+                })}>
                   Clear Form
                 </Button>
               </div>
@@ -761,34 +826,32 @@ const StudentDashboard = () => {
                 My Exam Scores
               </h3>
               <div className="space-y-3">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">GRE</h4>
-                      <p className="text-sm text-muted-foreground">Score: 320</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 15 May 2024 • Valid until: 15 May 2029
-                      </p>
+                {exams.map((exam) => (
+                  <div key={exam.id} className="bg-card border border-border rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-foreground">{exam.examType}</h4>
+                        <p className="text-sm text-muted-foreground">Score: {exam.score}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Date: {exam.examDate} {exam.validityPeriod ? `• Valid until: ${exam.validityPeriod}` : ''}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={async () => {
+                        try {
+                          await deleteDoc(doc(db, "competitive_exams", exam.id));
+                          toast.success("Exam score removed");
+                        } catch (error) {
+                          toast.error("Failed to remove exam score");
+                        }
+                      }}>
+                        Remove
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
                   </div>
-                </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">TOEFL</h4>
-                      <p className="text-sm text-muted-foreground">Score: 110</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 20 Jun 2024 • Valid until: 20 Jun 2026
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </div>
-                </div>
+                ))}
+                {exams.length === 0 && (
+                  <p className="text-muted-foreground text-sm">No exam scores added yet.</p>
+                )}
               </div>
             </div>
           </div>
@@ -798,34 +861,34 @@ const StudentDashboard = () => {
         {activeTab === "statistics" && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border border-border">
-                <h2 className="text-xl font-semibold text-foreground">
-                  Placement Statistics
-                </h2>
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <Select value={selectedYear} onValueChange={setSelectedYear}>
-                        <SelectTrigger className="w-[140px]">
-                            <SelectValue placeholder="Year" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="All Years">All Years</SelectItem>
-                            {availableYears.map((year) => (
-                                <SelectItem key={year} value={year}>
-                                    {year}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Reset Filters"
-                        onClick={() => {
-                            setSelectedYear("All Years");
-                        }}
-                    >
-                        <Filter className="h-4 w-4" />
-                    </Button>
-                </div>
+              <h2 className="text-xl font-semibold text-foreground">
+                Placement Statistics
+              </h2>
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All Years">All Years</SelectItem>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Reset Filters"
+                  onClick={() => {
+                    setSelectedYear("All Years");
+                  }}
+                >
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -851,11 +914,11 @@ const StudentDashboard = () => {
 
             {/* Visualizations Component */}
             <div className="mt-6">
-                <PlacementAnalyticsCharts 
-                    data={analyticsData}
-                    selectedYear={selectedYear}
-                    availableYears={availableYears}
-                />
+              <PlacementAnalyticsCharts
+                data={analyticsData}
+                selectedYear={selectedYear}
+                availableYears={availableYears}
+              />
             </div>
           </div>
         )}
@@ -866,7 +929,7 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               Alumni Directory
             </h2>
-            
+
             {alumniLoading ? (
               <div className="text-center py-12">
                 <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>

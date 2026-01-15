@@ -46,7 +46,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea"; 
+import { Textarea } from "@/components/ui/textarea";
 import {
   BarChart,
   Bar,
@@ -69,7 +69,7 @@ import * as XLSX from "xlsx";
 import { PlacementRecordsTab } from "@/components/admin/PlacementRecordsTab";
 import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsCharts";
 import { db, auth } from "@/lib/firebase"; // Ensure auth is imported
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 
 // Drives Tab Component
@@ -108,7 +108,7 @@ const DrivesTab = () => {
         ...formData,
         postedAt: new Date().toISOString()
       });
-      
+
       setFormData({
         company: "",
         role: "",
@@ -188,7 +188,7 @@ const DrivesTab = () => {
               <Input
                 id="d-desc"
                 placeholder="Criteria, rounds etc."
-                 value={formData.description}
+                value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
@@ -217,7 +217,7 @@ const DrivesTab = () => {
                       {drive.company}
                     </h4>
                     <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded-full flex items-center gap-1">
-                       <Calendar className="h-3 w-3" /> {drive.date}
+                      <Calendar className="h-3 w-3" /> {drive.date}
                     </span>
                   </div>
                   <p className="text-sm text-primary mb-1">{drive.role}</p>
@@ -403,6 +403,108 @@ const TestimonialsTab = () => {
   );
 };
 
+// Competitive Exams Tab Component
+// Competitive Exams Tab Component
+const CompetitiveExamsTab = () => {
+  const [exams, setExams] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch all exams (admin view)
+    const q = query(
+      collection(db, "competitive_exams"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setExams(data);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this record?")) return;
+    try {
+      await deleteDoc(doc(db, "competitive_exams", id));
+      toast.success("Record deleted");
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      toast.error("Failed to delete record");
+    }
+  };
+
+  const studentExams = exams.filter(exam => exam.role === 'student');
+  const alumniExams = exams.filter(exam => exam.role === 'alumni');
+
+  const ExamTable = ({ title, data }: { title: string, data: any[] }) => (
+    <div className="bg-card rounded-lg border border-border p-6 shadow-sm mb-6">
+      <h3 className="font-semibold text-foreground mb-4">
+        {title} ({data.length})
+      </h3>
+      {data.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Name</th>
+                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Exam Type</th>
+                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Score</th>
+                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Exam Date</th>
+                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Valid Until</th>
+                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((exam) => (
+                <tr key={exam.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                  <td className="py-3 px-4 text-sm text-foreground font-medium">{exam.studentName}</td>
+                  <td className="py-3 px-4 text-sm text-foreground">{exam.examType}</td>
+                  <td className="py-3 px-4 text-sm text-foreground">{exam.score}</td>
+                  <td className="py-3 px-4 text-sm text-muted-foreground">{exam.examDate}</td>
+                  <td className="py-3 px-4 text-sm text-muted-foreground">{exam.validityPeriod}</td>
+                  <td className="py-3 px-4">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                      onClick={() => handleDelete(exam.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+          No {title.toLowerCase()} found.
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold text-foreground">
+          Competitive Exam Scores
+        </h2>
+      </div>
+
+      <ExamTable title="Student Exam Records" data={studentExams} />
+      <ExamTable title="Alumni Exam Records" data={alumniExams} />
+    </div>
+  );
+};
+
 // IMS Uploads Tab Component
 const IMSUploadsTab = () => {
   const [uploadedData, setUploadedData] = useState<any[]>([]);
@@ -446,16 +548,16 @@ const IMSUploadsTab = () => {
 
     setIsUploading(true);
     toast.info("Processing Excel file...");
-    
+
     try {
       const reader = new FileReader();
-      
+
       reader.onerror = (error) => {
         console.error('FileReader error:', error);
         toast.error("Failed to read file");
         setIsUploading(false);
       };
-      
+
       reader.onload = async (evt) => {
         try {
           const bstr = evt.target?.result;
@@ -480,16 +582,16 @@ const IMSUploadsTab = () => {
 
           const firstRow: any = data[0];
           const actualColumns = Object.keys(firstRow);
-          
+
           // Normalize function to handle case-insensitive and whitespace trimming
           const normalize = (str: string) => str.toLowerCase().trim().replace(/\s+/g, ' ');
-          
+
           // Check for missing fields with normalized comparison
           const normalizedActualColumns = actualColumns.map(normalize);
-          const missingFields = requiredFields.filter(field => 
+          const missingFields = requiredFields.filter(field =>
             !normalizedActualColumns.includes(normalize(field))
           );
-          
+
           if (missingFields.length > 0) {
             console.log('Required fields:', requiredFields);
             console.log('Actual columns found:', actualColumns);
@@ -501,14 +603,14 @@ const IMSUploadsTab = () => {
           // Store parsed data and show dialog if there's existing data
           setPendingFileData(data);
           setIsUploading(false);
-          
+
           if (uploadedData.length > 0) {
             setShowUploadDialog(true);
           } else {
             // No existing data, just upload directly
             await handleAddData(data);
           }
-          
+
           // Clear file input
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -533,7 +635,7 @@ const IMSUploadsTab = () => {
     setShowUploadDialog(false);
     try {
       // Delete all existing records
-      const deletePromises = uploadedData.map(record => 
+      const deletePromises = uploadedData.map(record =>
         deleteDoc(doc(db, "ims_internships", record.id))
       );
       await Promise.all(deletePromises);
@@ -587,7 +689,7 @@ const IMSUploadsTab = () => {
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "IMS Internships");
-    
+
     // Generate filename with current date
     const date = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `IMS_Internships_${date}.xlsx`);
@@ -647,129 +749,129 @@ const IMSUploadsTab = () => {
       </AlertDialog>
 
       <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">IMS Uploads</h2>
-          <p className="text-sm text-muted-foreground">
-            Upload and manage internship records from Excel files
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={handleDownload} variant="outline" disabled={uploadedData.length === 0}>
-            <Download className="h-4 w-4 mr-2" />
-            Download Excel
-          </Button>
-        </div>
-      </div>
-
-      {/* Upload Section */}
-      <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-        <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Upload className="h-4 w-4" /> Upload Excel File
-        </h3>
-        <div className="space-y-4">
-          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-            <Input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              disabled={isUploading}
-              className="hidden"
-              id="excel-upload"
-            />
-            <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-foreground font-medium mb-3">
-              {isUploading ? "Uploading..." : "Upload Excel File"}
-            </p>
-            <Button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              type="button"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Choose File
-            </Button>
-            <p className="text-sm text-muted-foreground mt-3">
-              Supports .xlsx and .xls files
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">IMS Uploads</h2>
+            <p className="text-sm text-muted-foreground">
+              Upload and manage internship records from Excel files
             </p>
           </div>
-          
-          <div className="bg-muted/50 rounded-lg p-4">
-            <p className="text-sm font-medium text-foreground mb-2">Required Excel Columns:</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted-foreground">
-              <div>• Academic Year</div>
-              <div>• Student Name</div>
-              <div>• Roll Number</div>
-              <div>• Branch</div>
-              <div>• Division</div>
-              <div>• Year of Study</div>
-              <div>• Number of Days of Internship</div>
-              <div>• Internship Start Date</div>
-              <div>• Internship End Date</div>
-              <div>• Organization Name</div>
-              <div>• Organization Address</div>
-              <div>• Internship Report</div>
-              <div>• Internship Completion Certificate</div>
+          <div className="flex gap-2">
+            <Button onClick={handleDownload} variant="outline" disabled={uploadedData.length === 0}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Excel
+            </Button>
+          </div>
+        </div>
+
+        {/* Upload Section */}
+        <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Upload className="h-4 w-4" /> Upload Excel File
+          </h3>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileUpload}
+                disabled={isUploading}
+                className="hidden"
+                id="excel-upload"
+              />
+              <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-foreground font-medium mb-3">
+                {isUploading ? "Uploading..." : "Upload Excel File"}
+              </p>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                type="button"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Choose File
+              </Button>
+              <p className="text-sm text-muted-foreground mt-3">
+                Supports .xlsx and .xls files
+              </p>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-sm font-medium text-foreground mb-2">Required Excel Columns:</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div>• Academic Year</div>
+                <div>• Student Name</div>
+                <div>• Roll Number</div>
+                <div>• Branch</div>
+                <div>• Division</div>
+                <div>• Year of Study</div>
+                <div>• Number of Days of Internship</div>
+                <div>• Internship Start Date</div>
+                <div>• Internship End Date</div>
+                <div>• Organization Name</div>
+                <div>• Organization Address</div>
+                <div>• Internship Report</div>
+                <div>• Internship Completion Certificate</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Data Table */}
-      <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
-        <h3 className="font-semibold text-foreground mb-4">
-          Uploaded Records ({uploadedData.length})
-        </h3>
-        {uploadedData.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Academic Year</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Student Name</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Roll Number</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Branch</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Organization</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Duration (Days)</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Start Date</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">End Date</th>
-                  <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {uploadedData.map((record) => (
-                  <tr key={record.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                    <td className="py-3 px-4 text-sm text-foreground">{record['Academic Year']}</td>
-                    <td className="py-3 px-4 text-sm text-foreground">{record['Student Name']}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Roll Number']}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Branch']}</td>
-                    <td className="py-3 px-4 text-sm text-foreground">{record['Organization Name']}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Number of Days of Internship']}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Internship Start Date']}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{record['Internship End Date']}</td>
-                    <td className="py-3 px-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                        onClick={() => handleDelete(record.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
+        {/* Data Table */}
+        <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+          <h3 className="font-semibold text-foreground mb-4">
+            Uploaded Records ({uploadedData.length})
+          </h3>
+          {uploadedData.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Academic Year</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Student Name</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Roll Number</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Branch</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Organization</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Duration (Days)</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Start Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">End Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
-            No data uploaded yet. Upload an Excel file to get started.
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {uploadedData.map((record) => (
+                    <tr key={record.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                      <td className="py-3 px-4 text-sm text-foreground">{record['Academic Year']}</td>
+                      <td className="py-3 px-4 text-sm text-foreground">{record['Student Name']}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{record['Roll Number']}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{record['Branch']}</td>
+                      <td className="py-3 px-4 text-sm text-foreground">{record['Organization Name']}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{record['Number of Days of Internship']}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{record['Internship Start Date']}</td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">{record['Internship End Date']}</td>
+                      <td className="py-3 px-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                          onClick={() => handleDelete(record.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+              No data uploaded yet. Upload an Excel file to get started.
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </>
   );
 };
@@ -801,34 +903,34 @@ const IMSReportsTab = () => {
       toast.error("Report not ready");
       return;
     }
-    
+
     toast.info("Generating PDF report...");
-    
+
     try {
       // Wait a bit for charts to fully render
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const canvas = await html2canvas(reportRef.current, { 
+
+      const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff'
       });
-      
+
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
+
       // If content is longer than one page, add multiple pages
       if (pdfHeight > pdf.internal.pageSize.getHeight()) {
         const pageHeight = pdf.internal.pageSize.getHeight();
         let heightLeft = pdfHeight;
         let position = 0;
-        
+
         pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
         heightLeft -= pageHeight;
-        
+
         while (heightLeft > 0) {
           position = heightLeft - pdfHeight;
           pdf.addPage();
@@ -838,7 +940,7 @@ const IMSReportsTab = () => {
       } else {
         pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       }
-      
+
       const date = new Date().toISOString().split('T')[0];
       pdf.save(`IMS_Report_${date}.pdf`);
       toast.success("Report downloaded successfully");
@@ -1139,79 +1241,79 @@ const AdminDashboard = () => {
       status: "Applied",
     },
   ]);
-  
+
   // Real Data State
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
 
   // Settings State
   const [settings, setSettings] = useState({
-      maintenanceMode: false,
-      placementSeason: true
+    maintenanceMode: false,
+    placementSeason: true
   });
   const [newPassword, setNewPassword] = useState("");
   const [loadingSettings, setLoadingSettings] = useState(true);
 
   // Fetch Settings & Analytics
   useEffect(() => {
-      const fetchData = async () => {
-          try {
-              // Fetch Analytics
-              const querySnapshot = await getDocs(collection(db, "placement_stats_yearly"));
-              const data = querySnapshot.docs.map(doc => doc.data());
-              data.sort((a: any, b: any) => b.year.localeCompare(a.year));
-              setAnalyticsData(data);
-              
-              const years = Array.from(new Set(data.map((d:any) => d.year))).sort();
-              setAvailableYears(years);
+    const fetchData = async () => {
+      try {
+        // Fetch Analytics
+        const querySnapshot = await getDocs(collection(db, "placement_stats_yearly"));
+        const data = querySnapshot.docs.map(doc => doc.data());
+        data.sort((a: any, b: any) => b.year.localeCompare(a.year));
+        setAnalyticsData(data);
 
-              // Fetch Settings
-              const settingsDoc = await getDoc(doc(db, "system_settings", "general"));
-              if (settingsDoc.exists()) {
-                  setSettings(settingsDoc.data() as any);
-              }
-          } catch (e) {
-              console.error("Error fetching data:", e);
-          } finally {
-              setLoadingSettings(false);
-          }
-      };
-      fetchData();
+        const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+        setAvailableYears(years);
+
+        // Fetch Settings
+        const settingsDoc = await getDoc(doc(db, "system_settings", "general"));
+        if (settingsDoc.exists()) {
+          setSettings(settingsDoc.data() as any);
+        }
+      } catch (e) {
+        console.error("Error fetching data:", e);
+      } finally {
+        setLoadingSettings(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const handleSettingChange = async (key: string, value: boolean) => {
-      const newSettings = { ...settings, [key]: value };
-      setSettings(newSettings); // Optimistic update
-      
-      try {
-          await setDoc(doc(db, "system_settings", "general"), newSettings, { merge: true });
-          toast.success("Settings updated successfully");
-      } catch (error) {
-          console.error("Error updating settings:", error);
-          toast.error("Failed to update settings");
-          setSettings(settings); // Revert on error
-      }
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings); // Optimistic update
+
+    try {
+      await setDoc(doc(db, "system_settings", "general"), newSettings, { merge: true });
+      toast.success("Settings updated successfully");
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      toast.error("Failed to update settings");
+      setSettings(settings); // Revert on error
+    }
   };
 
   const handlePasswordUpdate = async () => {
-      if (!newPassword || newPassword.length < 6) {
-          toast.error("Password must be at least 6 characters");
-          return;
-      }
-      
-      if (!auth.currentUser) {
-           toast.error("No active user found");
-           return;
-      }
+    if (!newPassword || newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
 
-      try {
-          await updatePassword(auth.currentUser, newPassword);
-          toast.success("Admin password updated successfully");
-          setNewPassword("");
-      } catch (error: any) {
-          console.error("Error updating password:", error);
-          toast.error("Failed to update password: " + error.message);
-      }
+    if (!auth.currentUser) {
+      toast.error("No active user found");
+      return;
+    }
+
+    try {
+      await updatePassword(auth.currentUser, newPassword);
+      toast.success("Admin password updated successfully");
+      setNewPassword("");
+    } catch (error: any) {
+      console.error("Error updating password:", error);
+      toast.error("Failed to update password: " + error.message);
+    }
   };
 
   const navItems = [
@@ -1246,6 +1348,11 @@ const AdminDashboard = () => {
       icon: <FileSpreadsheet className="h-4 w-4" />,
     },
     {
+      value: "competitive-exams",
+      label: "Competitive Exams",
+      icon: <Award className="h-4 w-4" />,
+    },
+    {
       value: "ims-uploads",
       label: "IMS Uploads",
       icon: <Upload className="h-4 w-4" />,
@@ -1270,42 +1377,42 @@ const AdminDashboard = () => {
   const COLORS = ["#1e3a5f", "#2d5a87", "#4a7dad", "#6b9dc7", "#8ebde0"];
 
   // Filter Logic
-  const filteredAnalyticsData = selectedYear === "All Years" 
-      ? analyticsData 
-      : analyticsData.filter((d: any) => d.year === selectedYear);
+  const filteredAnalyticsData = selectedYear === "All Years"
+    ? analyticsData
+    : analyticsData.filter((d: any) => d.year === selectedYear);
 
   // Aggregated Stats for Overview Cards
   const getAggregatedStats = () => {
-      const placed = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.placed) || 0), 0);
-      const eligible = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.eligible) || 0), 0);
-      const higherStudies = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.higherStudies) || 0), 0);
-      
-      // Overall Placement Rate (Total Placed / Total Eligible) * 100
-      const percentage = eligible > 0 ? Math.round((placed / eligible) * 100) : 0;
+    const placed = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.placed) || 0), 0);
+    const eligible = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.eligible) || 0), 0);
+    const higherStudies = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.higherStudies) || 0), 0);
 
-      // Avg Yearly Placement Rate = (Sum of Rate of Each Year) / Count of Years
-      // This gives equal weight to each year regardless of batch size
-      let totalYearlyRates = 0;
-      let yearCount = 0;
+    // Overall Placement Rate (Total Placed / Total Eligible) * 100
+    const percentage = eligible > 0 ? Math.round((placed / eligible) * 100) : 0;
 
-      filteredAnalyticsData.forEach(d => {
-          const e = Number(d.eligible) || 0;
-          const p = Number(d.placed) || 0;
-          if (e > 0) {
-              totalYearlyRates += (p / e) * 100;
-              yearCount++;
-          }
-      });
+    // Avg Yearly Placement Rate = (Sum of Rate of Each Year) / Count of Years
+    // This gives equal weight to each year regardless of batch size
+    let totalYearlyRates = 0;
+    let yearCount = 0;
 
-      const avgYearlyRate = yearCount > 0 ? Math.round(totalYearlyRates / yearCount) : 0;
+    filteredAnalyticsData.forEach(d => {
+      const e = Number(d.eligible) || 0;
+      const p = Number(d.placed) || 0;
+      if (e > 0) {
+        totalYearlyRates += (p / e) * 100;
+        yearCount++;
+      }
+    });
 
-      return {
-          placed,
-          total: eligible,
-          percentage,
-          higherStudies,
-          avgYearlyRate // New metric
-      };
+    const avgYearlyRate = yearCount > 0 ? Math.round(totalYearlyRates / yearCount) : 0;
+
+    return {
+      placed,
+      total: eligible,
+      percentage,
+      higherStudies,
+      avgYearlyRate // New metric
+    };
   };
 
   const filteredStats = getAggregatedStats();
@@ -1322,9 +1429,9 @@ const AdminDashboard = () => {
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
+
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      
+
       pdf.save(`Analytics_Report_${selectedYear}.pdf`);
       toast.success("Report downloaded successfully");
     } catch (err) {
@@ -1334,13 +1441,13 @@ const AdminDashboard = () => {
   };
 
   const getPieData = () => {
-      const data = filteredAnalyticsData[0]; // Should rely on single year filter
-      if(!data) return [];
-      return [
-          { name: "Placed", value: Number(data.placed) || 0, color: "#10b981" },
-          { name: "Higher Studies", value: Number(data.higherStudies) || 0, color: "#3b82f6" },
-          // Removed Unplaced
-      ];
+    const data = filteredAnalyticsData[0]; // Should rely on single year filter
+    if (!data) return [];
+    return [
+      { name: "Placed", value: Number(data.placed) || 0, color: "#10b981" },
+      { name: "Higher Studies", value: Number(data.higherStudies) || 0, color: "#3b82f6" },
+      // Removed Unplaced
+    ];
   };
 
   return (
@@ -1363,8 +1470,8 @@ const AdminDashboard = () => {
 
         {/* Overview Stats */}
         {activeTab === "overview" && (
-            // ... (keep existing overview code)
-            <div className="space-y-8">
+          // ... (keep existing overview code)
+          <div className="space-y-8">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard
@@ -1393,7 +1500,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               {/* ... (Recent Activity & Internships - keep existing) */}
+              {/* ... (Recent Activity & Internships - keep existing) */}
               {/* Recent Activity */}
               <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -1432,15 +1539,15 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-               {/* Internships Table */}
+              {/* Internships Table */}
               <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Briefcase className="h-4 w-4" /> Recent Internships
                 </h3>
-                  {/* ... (Keep existing table) */}
-                  <div className="text-center text-sm text-muted-foreground py-4">
-                      Check Internship tab for details
-                  </div>
+                {/* ... (Keep existing table) */}
+                <div className="text-center text-sm text-muted-foreground py-4">
+                  Check Internship tab for details
+                </div>
               </div>
             </div>
           </div>
@@ -1484,81 +1591,81 @@ const AdminDashboard = () => {
 
             {/* VISIBLE CHART CONTAINER */}
             <div className="space-y-6 bg-background p-4 rounded-md">
-                 {/* Key Metrics Row (Available in View) */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
-                    <p className="text-sm text-muted-foreground">Placed</p>
-                    <p className="text-2xl font-bold text-success">{filteredStats.placed}</p>
-                    </div>
-                    <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
-                    <p className="text-sm text-muted-foreground">Higher Studies</p>
-                    <p className="text-2xl font-bold text-info">{filteredStats.higherStudies}</p>
-                    </div>
-                    <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
-                    <p className="text-sm text-muted-foreground">Total Eligible</p>
-                    <p className="text-2xl font-bold">{filteredStats.total}</p>
-                    </div>
-                    <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
-                    <p className="text-sm text-muted-foreground">Success Rate</p>
-                    <p className="text-2xl font-bold text-primary">{filteredStats.percentage}%</p>
-                    </div>
+              {/* Key Metrics Row (Available in View) */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                  <p className="text-sm text-muted-foreground">Placed</p>
+                  <p className="text-2xl font-bold text-success">{filteredStats.placed}</p>
                 </div>
+                <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                  <p className="text-sm text-muted-foreground">Higher Studies</p>
+                  <p className="text-2xl font-bold text-info">{filteredStats.higherStudies}</p>
+                </div>
+                <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                  <p className="text-sm text-muted-foreground">Total Eligible</p>
+                  <p className="text-2xl font-bold">{filteredStats.total}</p>
+                </div>
+                <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                  <p className="text-sm text-muted-foreground">Success Rate</p>
+                  <p className="text-2xl font-bold text-primary">{filteredStats.percentage}%</p>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-1 gap-6">
                 {/* Visible Charts: showBreakdown={false} so only Bar updates */}
-                <PlacementAnalyticsCharts 
-                    data={filteredAnalyticsData}
-                    selectedYear={selectedYear}
-                    availableYears={availableYears}
-                    showBreakdown={false}
+                <PlacementAnalyticsCharts
+                  data={filteredAnalyticsData}
+                  selectedYear={selectedYear}
+                  availableYears={availableYears}
+                  showBreakdown={false}
                 />
-                </div>
+              </div>
             </div>
 
             {/* HIDDEN REPORT CONTAINER (For PDF Generation Only) */}
-            <div 
-              ref={hiddenReportRef} 
+            <div
+              ref={hiddenReportRef}
               style={{ position: 'absolute', top: '-10000px', left: '-10000px', width: '1200px' }}
               className="space-y-6 bg-white p-8" // Use white bg for clean PDF
             >
-                 <div className="mb-4 text-center border-b pb-4">
-                     <h2 className="text-3xl font-bold text-black">Placement Analytics Report</h2>
-                     <p className="text-gray-600 mt-2">{selectedYear === "All Years" ? "Comprehensive Report (All Years)" : `Academic Year: ${selectedYear}`}</p>
-                 </div>
+              <div className="mb-4 text-center border-b pb-4">
+                <h2 className="text-3xl font-bold text-black">Placement Analytics Report</h2>
+                <p className="text-gray-600 mt-2">{selectedYear === "All Years" ? "Comprehensive Report (All Years)" : `Academic Year: ${selectedYear}`}</p>
+              </div>
 
-                 {/* Report Metrics */}
-                <div className="grid grid-cols-4 gap-6 mb-8">
-                    <div className="border p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-500">Placed</p>
-                      <p className="text-3xl font-bold text-green-600">{filteredStats.placed}</p>
-                    </div>
-                    <div className="border p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-500">Higher Studies</p>
-                      <p className="text-3xl font-bold text-blue-600">{filteredStats.higherStudies}</p>
-                    </div>
-                    <div className="border p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-500">Total Eligible</p>
-                      <p className="text-3xl font-bold text-black">{filteredStats.total}</p>
-                    </div>
-                    <div className="border p-4 rounded-lg text-center">
-                      <p className="text-sm text-gray-500">Success Rate</p>
-                      <p className="text-3xl font-bold text-primary">{filteredStats.percentage}%</p>
-                    </div>
+              {/* Report Metrics */}
+              <div className="grid grid-cols-4 gap-6 mb-8">
+                <div className="border p-4 rounded-lg text-center">
+                  <p className="text-sm text-gray-500">Placed</p>
+                  <p className="text-3xl font-bold text-green-600">{filteredStats.placed}</p>
                 </div>
+                <div className="border p-4 rounded-lg text-center">
+                  <p className="text-sm text-gray-500">Higher Studies</p>
+                  <p className="text-3xl font-bold text-blue-600">{filteredStats.higherStudies}</p>
+                </div>
+                <div className="border p-4 rounded-lg text-center">
+                  <p className="text-sm text-gray-500">Total Eligible</p>
+                  <p className="text-3xl font-bold text-black">{filteredStats.total}</p>
+                </div>
+                <div className="border p-4 rounded-lg text-center">
+                  <p className="text-sm text-gray-500">Success Rate</p>
+                  <p className="text-3xl font-bold text-primary">{filteredStats.percentage}%</p>
+                </div>
+              </div>
 
-                {/* Report Charts: showBreakdown={true} to include all pies if All Years */}
-                <PlacementAnalyticsCharts 
-                    data={filteredAnalyticsData}
-                    selectedYear={selectedYear}
-                    availableYears={availableYears}
-                    showBreakdown={true}
-                />
-                
-                {/* Footer */}
-                <div className="text-center text-gray-500 text-sm border-t-2 border-gray-300 pt-6 mt-8">
-                  <p>This report was automatically generated by the Internship Management System</p>
-                  <p className="mt-1">Department of Computer Engineering</p>
-                </div>
+              {/* Report Charts: showBreakdown={true} to include all pies if All Years */}
+              <PlacementAnalyticsCharts
+                data={filteredAnalyticsData}
+                selectedYear={selectedYear}
+                availableYears={availableYears}
+                showBreakdown={true}
+              />
+
+              {/* Footer */}
+              <div className="text-center text-gray-500 text-sm border-t-2 border-gray-300 pt-6 mt-8">
+                <p>This report was automatically generated by the Internship Management System</p>
+                <p className="mt-1">Department of Computer Engineering</p>
+              </div>
             </div>
 
           </div>
@@ -1641,13 +1748,12 @@ const AdminDashboard = () => {
                       </td>
                       <td className="py-3 px-4">
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            intern.status === "Completed"
-                              ? "bg-success/10 text-success"
-                              : intern.status === "Ongoing"
+                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${intern.status === "Completed"
+                            ? "bg-success/10 text-success"
+                            : intern.status === "Ongoing"
                               ? "bg-info/10 text-info"
                               : "bg-warning/10 text-warning"
-                          }`}
+                            }`}
                         >
                           {intern.status}
                         </span>
@@ -1668,6 +1774,9 @@ const AdminDashboard = () => {
 
         {/* Placement Records Tab */}
         {activeTab === "placement-records" && <PlacementRecordsTab />}
+
+        {/* Competitive Exams Tab */}
+        {activeTab === "competitive-exams" && <CompetitiveExamsTab />}
 
         {/* IMS Uploads Tab */}
         {activeTab === "ims-uploads" && <IMSUploadsTab />}
@@ -1737,9 +1846,9 @@ const AdminDashboard = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="admin-pass">New Password</Label>
-                  <Input 
-                    id="admin-pass" 
-                    type="password" 
+                  <Input
+                    id="admin-pass"
+                    type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
