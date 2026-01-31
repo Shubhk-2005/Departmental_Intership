@@ -1,7 +1,7 @@
 <?php
 /**
  * User Service
- * Handles all user-related database operations
+ * Handles all user-related database operations using REST API
  */
 
 require_once __DIR__ . '/../config/firebase.php';
@@ -15,7 +15,7 @@ class UserService
      */
     public function createUser(array $userData): array
     {
-        $db = db();
+        $firestore = db();
         $now = new DateTime();
 
         $user = array_merge($userData, [
@@ -23,10 +23,14 @@ class UserService
             'updatedAt' => $now->format('c')
         ]);
 
-        $docRef = $db->collection($this->collection)->document($userData['uid']);
-        $docRef->set($user);
+        // For users, we want to use the uid as the document ID
+        // We need to create with specific ID, so we'll use a workaround
+        // Create the document and store the uid
+        $user['id'] = $userData['uid'];
 
-        return $user;
+        // Note: REST API doesn't easily support custom IDs, 
+        // but we can work around by using the uid field for lookups
+        return $firestore->createDocument($this->collection, $user);
     }
 
     /**
@@ -34,15 +38,23 @@ class UserService
      */
     public function getUserById(string $uid): ?array
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($uid);
-        $snapshot = $docRef->snapshot();
+        $firestore = db();
 
-        if (!$snapshot->exists()) {
-            return null;
+        // First try to get by document ID
+        $user = $firestore->getDocument($this->collection, $uid);
+        if ($user) {
+            return $user;
         }
 
-        return $snapshot->data();
+        // Fallback: search by uid field
+        $allUsers = $firestore->getCollection($this->collection);
+        foreach ($allUsers as $u) {
+            if (isset($u['uid']) && $u['uid'] === $uid) {
+                return $u;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -50,11 +62,14 @@ class UserService
      */
     public function updateUser(string $uid, array $updates): void
     {
-        $db = db();
+        $firestore = db();
         $updates['updatedAt'] = (new DateTime())->format('c');
 
-        $docRef = $db->collection($this->collection)->document($uid);
-        $docRef->update($this->formatUpdates($updates));
+        // First find the document
+        $user = $this->getUserById($uid);
+        if ($user && isset($user['id'])) {
+            $firestore->updateDocument($this->collection, $user['id'], $updates);
+        }
     }
 
     /**
@@ -62,18 +77,16 @@ class UserService
      */
     public function getUsersByRole(string $role): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)->where('role', '=', $role);
-        $documents = $query->documents();
+        $firestore = db();
 
-        $users = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $users[] = $document->data();
-            }
-        }
+        // Get all documents and filter client-side
+        $allUsers = $firestore->getCollection($this->collection);
 
-        return $users;
+        $filtered = array_filter($allUsers, function ($user) use ($role) {
+            return isset($user['role']) && $user['role'] === $role;
+        });
+
+        return array_values($filtered);
     }
 
     /**
@@ -83,17 +96,5 @@ class UserService
     {
         $user = $this->getUserById($uid);
         return $user !== null;
-    }
-
-    /**
-     * Format updates for Firestore update operation
-     */
-    private function formatUpdates(array $updates): array
-    {
-        $formatted = [];
-        foreach ($updates as $key => $value) {
-            $formatted[] = ['path' => $key, 'value' => $value];
-        }
-        return $formatted;
     }
 }

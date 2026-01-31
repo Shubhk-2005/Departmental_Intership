@@ -1,7 +1,7 @@
 <?php
 /**
  * Drive Service
- * Handles all placement drive related operations
+ * Handles all placement drive related operations using REST API
  */
 
 require_once __DIR__ . '/../config/firebase.php';
@@ -15,23 +15,19 @@ class DriveService
      */
     public function createDrive(array $driveData): array
     {
-        $db = db();
+        $firestore = db();
         $now = new DateTime();
 
         $drive = array_merge($driveData, [
             'createdAt' => $now->format('c')
         ]);
 
-        // Convert deadline to ISO format if it's a string
-        if (isset($drive['deadline']) && !is_string($drive['deadline'])) {
+        // Convert deadline to ISO format if it's a DateTime object
+        if (isset($drive['deadline']) && $drive['deadline'] instanceof DateTime) {
             $drive['deadline'] = $drive['deadline']->format('c');
         }
 
-        $docRef = $db->collection($this->collection)->newDocument();
-        $docRef->set($drive);
-
-        $drive['id'] = $docRef->id();
-        return $drive;
+        return $firestore->createDocument($this->collection, $drive);
     }
 
     /**
@@ -39,23 +35,24 @@ class DriveService
      */
     public function getActiveDrives(): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->where('isActive', '=', true)
-            ->orderBy('deadline', 'ASC');
+        $firestore = db();
 
-        $documents = $query->documents();
+        // Get all documents and filter client-side
+        $allDrives = $firestore->getCollection($this->collection);
 
-        $drives = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $drives[] = $data;
-            }
-        }
+        // Filter for active drives
+        $activeDrives = array_filter($allDrives, function ($drive) {
+            return isset($drive['isActive']) && $drive['isActive'] === true;
+        });
 
-        return $drives;
+        // Sort by deadline ascending
+        usort($activeDrives, function ($a, $b) {
+            $deadlineA = $a['deadline'] ?? '';
+            $deadlineB = $b['deadline'] ?? '';
+            return strcmp($deadlineA, $deadlineB);
+        });
+
+        return array_values($activeDrives);
     }
 
     /**
@@ -63,20 +60,15 @@ class DriveService
      */
     public function getAllDrives(): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->orderBy('createdAt', 'DESC');
+        $firestore = db();
+        $drives = $firestore->getCollection($this->collection);
 
-        $documents = $query->documents();
-
-        $drives = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $drives[] = $data;
-            }
-        }
+        // Sort by createdAt descending
+        usort($drives, function ($a, $b) {
+            $createdA = $a['createdAt'] ?? '';
+            $createdB = $b['createdAt'] ?? '';
+            return strcmp($createdB, $createdA);
+        });
 
         return $drives;
     }
@@ -86,17 +78,8 @@ class DriveService
      */
     public function getDriveById(string $id): ?array
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $snapshot = $docRef->snapshot();
-
-        if (!$snapshot->exists()) {
-            return null;
-        }
-
-        $data = $snapshot->data();
-        $data['id'] = $snapshot->id();
-        return $data;
+        $firestore = db();
+        return $firestore->getDocument($this->collection, $id);
     }
 
     /**
@@ -104,15 +87,14 @@ class DriveService
      */
     public function updateDrive(string $id, array $updates): void
     {
-        $db = db();
+        $firestore = db();
 
         // Convert deadline if present
         if (isset($updates['deadline']) && $updates['deadline'] instanceof DateTime) {
             $updates['deadline'] = $updates['deadline']->format('c');
         }
 
-        $docRef = $db->collection($this->collection)->document($id);
-        $docRef->update($this->formatUpdates($updates));
+        $firestore->updateDocument($this->collection, $id, $updates);
     }
 
     /**
@@ -120,9 +102,8 @@ class DriveService
      */
     public function deleteDrive(string $id): void
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $docRef->delete();
+        $firestore = db();
+        $firestore->deleteDocument($this->collection, $id);
     }
 
     /**
@@ -131,17 +112,5 @@ class DriveService
     public function deactivateDrive(string $id): void
     {
         $this->updateDrive($id, ['isActive' => false]);
-    }
-
-    /**
-     * Format updates for Firestore update operation
-     */
-    private function formatUpdates(array $updates): array
-    {
-        $formatted = [];
-        foreach ($updates as $key => $value) {
-            $formatted[] = ['path' => $key, 'value' => $value];
-        }
-        return $formatted;
     }
 }

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { User, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { api } from "../services/api.service";
 
@@ -123,18 +123,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Maintenance Mode Listener
+  // Maintenance Mode Check (one-time, no real-time listener to avoid CORS issues)
   useEffect(() => {
-    const unsubscribeMaintenance = onSnapshot(
-      doc(db, "system_settings", "general"),
-      (doc) => {
-        if (doc.exists()) {
-          setIsMaintenanceMode(doc.data().maintenanceMode || false);
+    const checkMaintenanceMode = async () => {
+      try {
+        const docRef = doc(db, "system_settings", "general");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setIsMaintenanceMode(docSnap.data().maintenanceMode || false);
         }
+      } catch (error) {
+        console.error('Error checking maintenance mode:', error);
+        // Default to non-maintenance mode on error
+        setIsMaintenanceMode(false);
       }
-    );
-
-    return () => unsubscribeMaintenance();
+    };
+    
+    checkMaintenanceMode();
   }, []);
 
   useEffect(() => {

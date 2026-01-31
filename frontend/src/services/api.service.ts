@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { auth } from '@/lib/firebase';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_URL = import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_URL || '/api');
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -9,7 +9,7 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 30000, // Increased to 30 seconds
 });
 
 // Request interceptor to add auth token
@@ -81,7 +81,8 @@ export const api = {
 
   // Alumni endpoints
   alumni: {
-    getAll: () => apiClient.get('/alumni'),
+    getPublic: (search?: string) => apiClient.get('/alumni', { params: { search } }),
+    getAll: () => apiClient.get('/alumni/all'), // Admin only
     getMyProfile: () => apiClient.get('/alumni/my-profile'),
     create: (data: any) => apiClient.post('/alumni', data),
     update: (id: string, data: any) => apiClient.put(`/alumni/${id}`, data),
@@ -95,6 +96,16 @@ export const api = {
     getStatsByYear: (year: string) => apiClient.get(`/placements/stats/${year}`),
     createStats: (data: any) => apiClient.post('/placements/stats', data),
     deleteStats: (year: string) => apiClient.delete(`/placements/stats/${year}`),
+  },
+
+  // Competitive exams endpoints
+  exams: {
+    getMyExams: () => apiClient.get('/exams'),
+    getStudentExams: () => apiClient.get('/exams/students'), // Admin only
+    getById: (id: string) => apiClient.get(`/exams/${id}`),
+    create: (data: any) => apiClient.post('/exams', data),
+    update: (id: string, data: any) => apiClient.put(`/exams/${id}`, data),
+    delete: (id: string) => apiClient.delete(`/exams/${id}`),
   },
 
   // Upload endpoints (for Firebase Storage)

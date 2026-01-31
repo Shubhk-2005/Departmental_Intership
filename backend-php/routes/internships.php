@@ -96,9 +96,16 @@ function handleCreateInternship(): void
 
     $authUser = getAuthUser();
 
+    // Get user details for admin visibility
+    require_once __DIR__ . '/../services/UserService.php';
+    $userService = new UserService();
+    $userData = $userService->getUserById($authUser['uid']);
+
     try {
         $internship = getInternshipService()->createInternship([
             'studentId' => $authUser['uid'],
+            'studentName' => $userData['name'] ?? $authUser['email'],
+            'studentEmail' => $authUser['email'],
             'companyName' => $body['companyName'],
             'role' => $body['role'],
             'domain' => $body['domain'],
@@ -109,7 +116,9 @@ function handleCreateInternship(): void
             'internshipType' => $body['internshipType'] ?? 'Unpaid',
             'stipendAmount' => $body['stipendAmount'] ?? null,
             'stipendCurrency' => $body['stipendCurrency'] ?? null,
-            'driveId' => $body['driveId'] ?? null
+            'driveId' => $body['driveId'] ?? null,
+            'startDate' => $body['startDate'] ?? null,
+            'endDate' => $body['endDate'] ?? null
         ]);
 
         jsonResponse([

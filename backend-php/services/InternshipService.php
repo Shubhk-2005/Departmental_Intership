@@ -1,7 +1,7 @@
 <?php
 /**
  * Internship Service
- * Handles student internship applications
+ * Handles student internship applications using REST API
  */
 
 require_once __DIR__ . '/../config/firebase.php';
@@ -15,18 +15,14 @@ class InternshipService
      */
     public function createInternship(array $internshipData): array
     {
-        $db = db();
+        $firestore = db();
         $now = new DateTime();
 
         $internship = array_merge($internshipData, [
             'appliedDate' => $now->format('c')
         ]);
 
-        $docRef = $db->collection($this->collection)->newDocument();
-        $docRef->set($internship);
-
-        $internship['id'] = $docRef->id();
-        return $internship;
+        return $firestore->createDocument($this->collection, $internship);
     }
 
     /**
@@ -34,23 +30,24 @@ class InternshipService
      */
     public function getStudentInternships(string $studentId): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->where('studentId', '=', $studentId)
-            ->orderBy('appliedDate', 'DESC');
+        $firestore = db();
 
-        $documents = $query->documents();
+        // Get all documents and filter client-side
+        $allInternships = $firestore->getCollection($this->collection);
 
-        $internships = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $internships[] = $data;
-            }
-        }
+        // Filter for student's internships
+        $studentInternships = array_filter($allInternships, function ($internship) use ($studentId) {
+            return isset($internship['studentId']) && $internship['studentId'] === $studentId;
+        });
 
-        return $internships;
+        // Sort by appliedDate descending
+        usort($studentInternships, function ($a, $b) {
+            $dateA = $a['appliedDate'] ?? '';
+            $dateB = $b['appliedDate'] ?? '';
+            return strcmp($dateB, $dateA);
+        });
+
+        return array_values($studentInternships);
     }
 
     /**
@@ -58,20 +55,15 @@ class InternshipService
      */
     public function getAllInternships(): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->orderBy('appliedDate', 'DESC');
+        $firestore = db();
+        $internships = $firestore->getCollection($this->collection);
 
-        $documents = $query->documents();
-
-        $internships = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $internships[] = $data;
-            }
-        }
+        // Sort by appliedDate descending
+        usort($internships, function ($a, $b) {
+            $dateA = $a['appliedDate'] ?? '';
+            $dateB = $b['appliedDate'] ?? '';
+            return strcmp($dateB, $dateA);
+        });
 
         return $internships;
     }
@@ -81,17 +73,8 @@ class InternshipService
      */
     public function getInternshipById(string $id): ?array
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $snapshot = $docRef->snapshot();
-
-        if (!$snapshot->exists()) {
-            return null;
-        }
-
-        $data = $snapshot->data();
-        $data['id'] = $snapshot->id();
-        return $data;
+        $firestore = db();
+        return $firestore->getDocument($this->collection, $id);
     }
 
     /**
@@ -99,9 +82,8 @@ class InternshipService
      */
     public function updateInternship(string $id, array $updates): void
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $docRef->update($this->formatUpdates($updates));
+        $firestore = db();
+        $firestore->updateDocument($this->collection, $id, $updates);
     }
 
     /**
@@ -109,9 +91,8 @@ class InternshipService
      */
     public function deleteInternship(string $id): void
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $docRef->delete();
+        $firestore = db();
+        $firestore->deleteDocument($this->collection, $id);
     }
 
     /**
@@ -119,35 +100,24 @@ class InternshipService
      */
     public function getInternshipsByStatus(string $studentId, string $status): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->where('studentId', '=', $studentId)
-            ->where('status', '=', $status)
-            ->orderBy('appliedDate', 'DESC');
+        $firestore = db();
 
-        $documents = $query->documents();
+        // Get all documents and filter client-side
+        $allInternships = $firestore->getCollection($this->collection);
 
-        $internships = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $internships[] = $data;
-            }
-        }
+        // Filter for student's internships with specific status
+        $filtered = array_filter($allInternships, function ($internship) use ($studentId, $status) {
+            return isset($internship['studentId']) && $internship['studentId'] === $studentId
+                && isset($internship['status']) && $internship['status'] === $status;
+        });
 
-        return $internships;
-    }
+        // Sort by appliedDate descending
+        usort($filtered, function ($a, $b) {
+            $dateA = $a['appliedDate'] ?? '';
+            $dateB = $b['appliedDate'] ?? '';
+            return strcmp($dateB, $dateA);
+        });
 
-    /**
-     * Format updates for Firestore update operation
-     */
-    private function formatUpdates(array $updates): array
-    {
-        $formatted = [];
-        foreach ($updates as $key => $value) {
-            $formatted[] = ['path' => $key, 'value' => $value];
-        }
-        return $formatted;
+        return array_values($filtered);
     }
 }

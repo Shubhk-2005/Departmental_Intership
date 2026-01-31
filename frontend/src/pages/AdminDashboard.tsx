@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { api } from "@/services/api.service";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatCard from "@/components/cards/StatCard";
 import AlumniCard from "@/components/cards/AlumniCard";
@@ -76,17 +77,17 @@ import { updatePassword } from "firebase/auth";
 const DrivesTab = () => {
   const [drives, setDrives] = useState<any[]>([]);
 
-  useEffect(() => {
-    const q = query(collection(db, "placement_drives"), orderBy("postedAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const drivesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setDrives(drivesData);
-    });
+  const fetchDrives = async () => {
+    try {
+      const response = await api.drives.getAll();
+      setDrives(response.data?.drives || []);
+    } catch (error) {
+      console.error("Error fetching drives:", error);
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchDrives();
   }, []);
 
   const [formData, setFormData] = useState({
@@ -104,7 +105,7 @@ const DrivesTab = () => {
     }
 
     try {
-      await addDoc(collection(db, "placement_drives"), {
+      await api.drives.create({
         ...formData,
         postedAt: new Date().toISOString()
       });
@@ -116,6 +117,7 @@ const DrivesTab = () => {
         description: "",
       });
       toast.success("New drive posted successfully");
+      fetchDrives(); // Refresh list
     } catch (error) {
       console.error("Error adding drive:", error);
       toast.error("Failed to post drive");
@@ -124,8 +126,9 @@ const DrivesTab = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "placement_drives", id));
+      await api.drives.delete(id);
       toast.success("Drive removed");
+      fetchDrives(); // Refresh list
     } catch (error) {
       console.error("Error deleting drive:", error);
       toast.error("Failed to remove drive");
@@ -243,6 +246,132 @@ const DrivesTab = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// Student Exams Tab - Admin can view student exam scores
+const StudentExamsTab = () => {
+  const [studentExams, setStudentExams] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStudentExams = async () => {
+      setLoading(true);
+      try {
+        const { api } = await import("@/services/api.service");
+        const response = await api.exams.getStudentExams();
+        setStudentExams(response.data.exams || []);
+        setError(null);
+      } catch (err: any) {
+        console.error("Error fetching student exams:", err);
+        setError(err.response?.data?.error || "Failed to load student exam scores");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudentExams();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">
+            Student Competitive Exam Scores
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            View exam scores submitted by students (GRE, TOEFL, GATE, CAT, etc.)
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+          <p className="mt-4 text-muted-foreground">Loading student exam scores...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 bg-destructive/10 rounded-lg border border-destructive/20">
+          <p className="text-destructive">{error}</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : studentExams.length === 0 ? (
+        <div className="text-center py-12 bg-muted/20 rounded-lg border-2 border-dashed border-muted">
+          <Award className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">
+            No student exam scores available yet.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Student Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Exam Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Score
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Exam Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Valid Until
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Submitted
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {studentExams.map((exam) => (
+                  <tr key={exam.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {exam.userEmail || "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                        {exam.examType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-foreground">
+                      {exam.score}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                      {exam.examDate ? new Date(exam.examDate).toLocaleDateString() : "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                      {exam.validityPeriod ? new Date(exam.validityPeriod).toLocaleDateString() : "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                      {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString() : "N/A"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 py-3 bg-muted/20 border-t border-border">
+            <p className="text-sm text-muted-foreground">
+              Total: {studentExams.length} exam score{studentExams.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -778,6 +907,8 @@ const IMSUploadsTab = () => {
 const IMSReportsTab = () => {
   const [imsData, setImsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<string>("All Years");
+  const [selectedMonth, setSelectedMonth] = useState<string>("All Months");
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -795,6 +926,53 @@ const IMSReportsTab = () => {
     };
     fetchIMSData();
   }, []);
+
+  // Helper to parse date
+  const parseDate = (dateStr: any) => {
+    if (!dateStr) return null;
+    // Handle Excel serial date
+    if (typeof dateStr === 'number') {
+      const date = new Date((dateStr - 25569) * 86400 * 1000);
+      return date;
+    }
+    // Handle string formats
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  // Get unique Years and Months from data
+  const { availableYears, availableMonths } = useMemo(() => {
+    const years = new Set<string>();
+    const months = new Set<string>();
+    
+    imsData.forEach(item => {
+      const date = parseDate(item['Internship Start Date']);
+      if (date) {
+        years.add(date.getFullYear().toString());
+        months.add(date.toLocaleString('default', { month: 'long' }));
+      }
+    });
+
+    return {
+      availableYears: Array.from(years).sort().reverse(),
+      availableMonths: Array.from(months).sort((a, b) => {
+        return new Date(`${a} 1, 2000`).getMonth() - new Date(`${b} 1, 2000`).getMonth();
+      })
+    };
+  }, [imsData]);
+
+  // Filter Data
+  const filteredData = useMemo(() => {
+    return imsData.filter(item => {
+      const date = parseDate(item['Internship Start Date']);
+      if (!date) return false;
+
+      const yearMatch = selectedYear === "All Years" || date.getFullYear().toString() === selectedYear;
+      const monthMatch = selectedMonth === "All Months" || date.toLocaleString('default', { month: 'long' }) === selectedMonth;
+
+      return yearMatch && monthMatch;
+    });
+  }, [imsData, selectedYear, selectedMonth]);
 
   const downloadReport = async () => {
     if (!reportRef.current) {
@@ -840,7 +1018,8 @@ const IMSReportsTab = () => {
       }
       
       const date = new Date().toISOString().split('T')[0];
-      pdf.save(`IMS_Report_${date}.pdf`);
+      const filterSuffix = selectedYear !== "All Years" ? `_${selectedYear}` : '';
+      pdf.save(`IMS_Report${filterSuffix}_${date}.pdf`);
       toast.success("Report downloaded successfully");
     } catch (err) {
       console.error("PDF Gen Error:", err);
@@ -848,18 +1027,18 @@ const IMSReportsTab = () => {
     }
   };
 
-  // Calculate statistics
+  // Calculate statistics based on filteredData
   const stats = {
-    totalStudents: imsData.length,
-    totalDays: imsData.reduce((sum, item) => sum + (Number(item['Number of Days of Internship']) || 0), 0),
-    avgDays: imsData.length > 0 ? Math.round(imsData.reduce((sum, item) => sum + (Number(item['Number of Days of Internship']) || 0), 0) / imsData.length) : 0,
-    uniqueBranches: new Set(imsData.map(item => item['Branch'])).size,
-    uniqueOrganizations: new Set(imsData.map(item => item['Organization Name'])).size,
+    totalStudents: filteredData.length,
+    totalDays: filteredData.reduce((sum, item) => sum + (Number(item['Number of Days of Internship']) || 0), 0),
+    avgDays: filteredData.length > 0 ? Math.round(filteredData.reduce((sum, item) => sum + (Number(item['Number of Days of Internship']) || 0), 0) / filteredData.length) : 0,
+    uniqueBranches: new Set(filteredData.map(item => item['Branch'])).size,
+    uniqueOrganizations: new Set(filteredData.map(item => item['Organization Name'])).size,
   };
 
   // Branch-wise distribution
   const branchData = Object.entries(
-    imsData.reduce((acc: any, item) => {
+    filteredData.reduce((acc: any, item) => {
       const branch = item['Branch'] || 'Unknown';
       acc[branch] = (acc[branch] || 0) + 1;
       return acc;
@@ -868,7 +1047,7 @@ const IMSReportsTab = () => {
 
   // Year of Study distribution  
   const yearData = Object.entries(
-    imsData.reduce((acc: any, item) => {
+    filteredData.reduce((acc: any, item) => {
       const year = item['Year of Study'] || 'Unknown';
       acc[year] = (acc[year] || 0) + 1;
       return acc;
@@ -877,7 +1056,7 @@ const IMSReportsTab = () => {
 
   // Academic Year distribution
   const academicYearData = Object.entries(
-    imsData.reduce((acc: any, item) => {
+    filteredData.reduce((acc: any, item) => {
       const year = item['Academic Year'] || 'Unknown';
       acc[year] = (acc[year] || 0) + 1;
       return acc;
@@ -886,7 +1065,7 @@ const IMSReportsTab = () => {
 
   // Top Organizations
   const organizationData = Object.entries(
-    imsData.reduce((acc: any, item) => {
+    filteredData.reduce((acc: any, item) => {
       const org = item['Organization Name'] || 'Unknown';
       acc[org] = (acc[org] || 0) + 1;
       return acc;
@@ -912,17 +1091,45 @@ const IMSReportsTab = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-semibold text-foreground">IMS Reports</h2>
           <p className="text-sm text-muted-foreground">
             Visual analytics and insights from internship management data
           </p>
         </div>
-        <Button onClick={downloadReport}>
-          <Download className="h-4 w-4 mr-2" />
-          Download PDF Report
-        </Button>
+        <div className="flex flex-wrap gap-2 items-center">
+            {/* Year Filter */}
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="All Years">All Years</SelectItem>
+                    {availableYears.map(year => (
+                        <SelectItem key={year} value={year}>{year}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            {/* Month Filter */}
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="All Months">All Months</SelectItem>
+                    {availableMonths.map(month => (
+                        <SelectItem key={month} value={month}>{month}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            <Button onClick={downloadReport}>
+            <Download className="h-4 w-4 mr-2" />
+            Download PDF Report
+            </Button>
+        </div>
       </div>
 
       {/* Report Content */}
@@ -930,8 +1137,12 @@ const IMSReportsTab = () => {
         {/* Header for PDF */}
         <div className="text-center border-b-2 border-gray-300 pb-6">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">IMS Internship Report</h1>
-          <p className="text-gray-600">Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          <p className="text-gray-500 text-sm mt-1">Total Records: {imsData.length}</p>
+          <p className="text-gray-600">
+             {selectedMonth !== "All Months" ? selectedMonth : ""} {selectedYear !== "All Years" ? selectedYear : ""} Report
+             {(selectedMonth === "All Months" && selectedYear === "All Years") ? "Complete Overview" : ""}
+          </p>
+          <p className="text-gray-500 text-sm mt-1">Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <p className="text-gray-500 text-sm mt-1">Total Records: {filteredData.length}</p>
         </div>
 
         {/* Statistics Cards */}
@@ -1113,32 +1324,22 @@ const AdminDashboard = () => {
   const [selectedYear, setSelectedYear] = useState("All Years");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
 
-  const [internships, setInternships] = useState([
-    {
-      id: 1,
-      studentName: "Rahul Sharma",
-      rollNo: "70582200001",
-      company: "Google",
-      domain: "Software Engineering",
-      status: "Ongoing",
-    },
-    {
-      id: 2,
-      studentName: "Priya Patel",
-      rollNo: "70582200002",
-      company: "Microsoft",
-      domain: "Data Science",
-      status: "Completed",
-    },
-    {
-      id: 3,
-      studentName: "Amit Singh",
-      rollNo: "70582200003",
-      company: "Amazon",
-      domain: "Cloud Computing",
-      status: "Applied",
-    },
-  ]);
+  const [internships, setInternships] = useState<any[]>([]); // Real data from API
+
+  // Fetch Internships
+  useEffect(() => {
+    const fetchInternships = async () => {
+        try {
+            const response = await api.internships.getAll();
+            if (response.data && response.data.internships) {
+                setInternships(response.data.internships);
+            }
+        } catch (error) {
+            console.error("Error fetching internships:", error);
+        }
+    };
+    fetchInternships();
+  }, []);
   
   // Real Data State
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
@@ -1156,13 +1357,40 @@ const AdminDashboard = () => {
   useEffect(() => {
       const fetchData = async () => {
           try {
-              // Fetch Analytics
-              const querySnapshot = await getDocs(collection(db, "placement_stats_yearly"));
-              const data = querySnapshot.docs.map(doc => doc.data());
-              data.sort((a: any, b: any) => b.year.localeCompare(a.year));
-              setAnalyticsData(data);
+              // Fetch Analytics with Fallback Logic (Same as StudentDashboard)
+              // 1. Try API
+              const response = await api.placements.getAllStats();
+              let data = response.data?.stats || [];
+
+              // 2. Fallback to Firestore if API returns empty
+              if (data.length === 0) {
+                  try {
+                      const querySnapshot = await getDocs(collection(db, "placement_stats_yearly"));
+                      data = querySnapshot.docs.map(doc => doc.data());
+                      console.log("Fetched stats from Firestore fallback:", data);
+                  } catch (firestoreError) {
+                      console.error("Firestore fallback failed:", firestoreError);
+                  }
+              }
+
+              // 3. Process & Map Data
+              const processedData = data.map((item: any) => ({
+                  ...item,
+                  year: String(item.year), // Ensure year is string
+                  // Robust mapping for all potential key variations
+                  eligible: Number(item.eligible) || Number(item.totalStudents) || 0,
+                  placed: Number(item.placed) || Number(item.placedStudents) || 0,
+                  higherStudies: Number(item.higherStudies) || 0,
+                  // Calculate unplaced if not present
+                  unplaced: (Number(item.eligible) || Number(item.totalStudents) || 0) - 
+                           ((Number(item.placed) || Number(item.placedStudents) || 0) + 
+                            (Number(item.higherStudies) || 0))
+              }));
+
+              processedData.sort((a: any, b: any) => b.year.localeCompare(a.year));
+              setAnalyticsData(processedData);
               
-              const years = Array.from(new Set(data.map((d:any) => d.year))).sort();
+              const years = Array.from(new Set(processedData.map((d:any) => d.year))).sort() as string[];
               setAvailableYears(years);
 
               // Fetch Settings
@@ -1236,6 +1464,11 @@ const AdminDashboard = () => {
       icon: <Calendar className="h-4 w-4" />,
     },
     {
+      value: "student-exams",
+      label: "Student Exams",
+      icon: <Award className="h-4 w-4" />,
+    },
+    {
       value: "alumni",
       label: "Alumni Directory",
       icon: <GraduationCap className="h-4 w-4" />,
@@ -1276,15 +1509,15 @@ const AdminDashboard = () => {
 
   // Aggregated Stats for Overview Cards
   const getAggregatedStats = () => {
+      // Use unified keys 'placed' and 'eligible' which are guaranteed to exist due to mapping
       const placed = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.placed) || 0), 0);
       const eligible = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.eligible) || 0), 0);
-      const higherStudies = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.higherStudies) || 0), 0);
+      const higherStudies = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.higherStudies) || 0), 0); 
       
       // Overall Placement Rate (Total Placed / Total Eligible) * 100
       const percentage = eligible > 0 ? Math.round((placed / eligible) * 100) : 0;
 
-      // Avg Yearly Placement Rate = (Sum of Rate of Each Year) / Count of Years
-      // This gives equal weight to each year regardless of batch size
+      // Avg Yearly Placement Rate
       let totalYearlyRates = 0;
       let yearCount = 0;
 
@@ -1337,10 +1570,41 @@ const AdminDashboard = () => {
       const data = filteredAnalyticsData[0]; // Should rely on single year filter
       if(!data) return [];
       return [
-          { name: "Placed", value: Number(data.placed) || 0, color: "#10b981" },
+          { name: "Placed", value: Number(data.placedStudents) || 0, color: "#10b981" },
           { name: "Higher Studies", value: Number(data.higherStudies) || 0, color: "#3b82f6" },
           // Removed Unplaced
       ];
+  };
+
+  const handleExportInternships = () => {
+      if (internships.length === 0) {
+        toast.error("No internships data to export");
+        return;
+      }
+  
+      // Format data for export
+      const exportData = internships.map((item: any) => ({
+        "Student Name": item.studentName,
+        "Roll Number": item.rollNumber || "N/A",
+        "Email": item.studentEmail || "N/A",
+        "Company": item.companyName,
+        "Role": item.role,
+        "Domain": item.domain,
+        "Category": item.category,
+        "Type": item.type,
+        "Status": item.status,
+        "Applied Date": item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "N/A"
+      }));
+  
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Internships");
+      
+      // Generate filename
+      const date = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Internships_Export_${date}.xlsx`);
+      
+      toast.success("Internships data exported successfully");
   };
 
   return (
@@ -1589,11 +1853,7 @@ const AdminDashboard = () => {
                 </Select>
                 <Button
                   variant="outline"
-                  onClick={() =>
-                    toast.success("Data Exported", {
-                      description: "Internship data exported to CSV.",
-                    })
-                  }
+                  onClick={handleExportInternships}
                 >
                   <FileText className="h-4 w-4 mr-2" />
                   Export CSV
@@ -1631,10 +1891,10 @@ const AdminDashboard = () => {
                         {intern.studentName}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
-                        {intern.rollNo}
+                        {intern.rollNumber || intern.studentEmail || "N/A"}
                       </td>
                       <td className="py-3 px-4 text-foreground">
-                        {intern.company}
+                        {intern.companyName}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">
                         {intern.domain}
@@ -1662,6 +1922,9 @@ const AdminDashboard = () => {
 
         {/* Drives Tab */}
         {activeTab === "drives" && <DrivesTab />}
+
+        {/* Student Exams Tab */}
+        {activeTab === "student-exams" && <StudentExamsTab />}
 
         {/* Alumni Directory Tab */}
         {activeTab === "alumni" && <AlumniTab />}

@@ -21,15 +21,42 @@ function getAlumniService(): AlumniService
 
 /**
  * GET /api/alumni
- * Get all public alumni profiles
+ * Get all public alumni profiles (supports ?search= query parameter)
  */
 function handleGetAlumni(): void
 {
     try {
-        $alumni = getAlumniService()->getPublicAlumni();
+        // Check for search query parameter
+        $search = $_GET['search'] ?? '';
+
+        if (!empty($search)) {
+            $alumni = getAlumniService()->searchAlumni($search);
+        } else {
+            $alumni = getAlumniService()->getPublicAlumni();
+        }
+
         jsonResponse(['alumni' => $alumni]);
     } catch (Exception $e) {
         error_log('Get alumni error: ' . $e->getMessage());
+        jsonError($e->getMessage() ?: 'Failed to fetch alumni', 500);
+    }
+}
+
+/**
+ * GET /api/alumni/all
+ * Get all alumni profiles including private (admin only)
+ */
+function handleGetAllAlumni(): void
+{
+    if (!authWithRole('admin')) {
+        return;
+    }
+
+    try {
+        $alumni = getAlumniService()->getAllAlumni();
+        jsonResponse(['alumni' => $alumni]);
+    } catch (Exception $e) {
+        error_log('Get all alumni error: ' . $e->getMessage());
         jsonError($e->getMessage() ?: 'Failed to fetch alumni', 500);
     }
 }
@@ -188,6 +215,12 @@ function handleAlumniRoutes(string $method, array $pathParts): void
         return;
     }
 
+    // GET /api/alumni/all (admin only)
+    if ($method === 'GET' && $param1 === 'all') {
+        handleGetAllAlumni();
+        return;
+    }
+
     // GET /api/alumni/my-profile
     if ($method === 'GET' && $param1 === 'my-profile') {
         handleGetMyProfile();
@@ -201,7 +234,7 @@ function handleAlumniRoutes(string $method, array $pathParts): void
     }
 
     // Routes with ID parameter
-    if (!empty($param1) && $param1 !== 'my-profile') {
+    if (!empty($param1) && $param1 !== 'my-profile' && $param1 !== 'all') {
         $id = $param1;
 
         // PUT /api/alumni/:id

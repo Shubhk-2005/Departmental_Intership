@@ -5,7 +5,7 @@ export const useAlumni = () => {
   return useQuery({
     queryKey: ['alumni'],
     queryFn: async () => {
-      const response = await api.alumni.getAll();
+      const response = await api.alumni.getPublic();
       return response.data.alumni;
     },
   });

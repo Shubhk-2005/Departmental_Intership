@@ -83,39 +83,140 @@ const AlumniDashboard = () => {
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [analyticsData, setAnalyticsData] = useState<any[]>([]);
 
+  // Competitive Exams State
+  const [myExams, setMyExams] = useState<any[]>([]);
+  const [examsLoading, setExamsLoading] = useState(false);
+  const [examFormData, setExamFormData] = useState({
+    examType: '',
+    score: '',
+    examDate: '',
+    validityPeriod: ''
+  });
+  const [submittingExam, setSubmittingExam] = useState(false);
+
+  // Fetch user's competitive exam scores
+  useEffect(() => {
+    const fetchMyExams = async () => {
+      setExamsLoading(true);
+      try {
+        const response = await api.exams.getMyExams();
+        setMyExams(response.data.exams || []);
+      } catch (error) {
+        console.error('Error fetching exams:', error);
+      } finally {
+        setExamsLoading(false);
+      }
+    };
+
+    if (activeTab === 'competitive-exams') {
+      fetchMyExams();
+    }
+  }, [activeTab]);
+
+  // Handle competitive exam form submission
+  const handleExamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!examFormData.examType || !examFormData.score || !examFormData.examDate) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setSubmittingExam(true);
+    try {
+      const response = await api.exams.create(examFormData);
+      toast.success('Exam score added successfully!');
+      // Add new exam to local state - safely handle response
+      const newExam = response.data?.exam;
+      if (newExam && newExam.id) {
+        setMyExams(prev => [newExam, ...prev]);
+      } else {
+        // Refresh the exams list to get the new exam
+        const refreshResponse = await api.exams.getMyExams();
+        setMyExams(refreshResponse.data?.exams || []);
+      }
+      setExamFormData({
+        examType: '',
+        score: '',
+        examDate: '',
+        validityPeriod: ''
+      });
+    } catch (error: any) {
+      console.error('Error adding exam:', error);
+      toast.error(error.response?.data?.error || 'Failed to add exam score');
+    } finally {
+      setSubmittingExam(false);
+    }
+  };
+
+  // Handle exam deletion
+  const handleDeleteExam = async (examId: string) => {
+    try {
+      await api.exams.delete(examId);
+      toast.success('Exam score deleted');
+      setMyExams(prev => prev.filter(exam => exam.id !== examId));
+    } catch (error: any) {
+      console.error('Error deleting exam:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete exam');
+    }
+  };
+
   useEffect(() => {
       const fetchStats = async () => {
           try {
-              const recordsRef = collection(db, "placement_stats_yearly");
-              const snapshot = await getDocs(recordsRef);
-              const data = snapshot.docs.map(doc => doc.data());
+              // Try to get stats from PHP backend first
+              const response = await api.placements.getAllStats();
+              const data = response.data?.stats || [];
               
-              if (data.length === 0) return;
-
-              // Store full data and available years
-              const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
-              setAvailableYears(years);
-              setAnalyticsData(data);
-
-              // Filter Data based on selectedYear
-              let filteredData = data;
-              if (selectedYear !== "All Years") {
-                   filteredData = data.filter((d: any) => d.year === selectedYear);
+              if (data.length === 0) {
+                // Fallback to Firestore if backend returns empty
+                const recordsRef = collection(db, "placement_stats_yearly");
+                const snapshot = await getDocs(recordsRef);
+                const firestoreData = snapshot.docs.map(doc => doc.data());
+                if (firestoreData.length > 0) {
+                  processStatsData(firestoreData);
+                }
+              } else {
+                processStatsData(data);
               }
-
-              const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
-              const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
-              const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
-              
-              setStats({
-                  placed: placedCount,
-                  totalEligible: totalEligible,
-                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0,
-                  higherStudies: higherStudiesCount
-              });
           } catch (error) {
-              console.error("Error fetching stats:", error);
+              console.error("Error fetching stats from API:", error);
+              // Fallback to Firestore on error
+              try {
+                const recordsRef = collection(db, "placement_stats_yearly");
+                const snapshot = await getDocs(recordsRef);
+                const data = snapshot.docs.map(doc => doc.data());
+                if (data.length > 0) {
+                  processStatsData(data);
+                }
+              } catch (firestoreError) {
+                console.error("Firestore fallback also failed:", firestoreError);
+              }
           }
+      };
+      
+      const processStatsData = (data: any[]) => {
+        // Store full data and available years
+        const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+        setAvailableYears(years as string[]);
+        setAnalyticsData(data);
+
+        // Filter Data based on selectedYear
+        let filteredData = data;
+        if (selectedYear !== "All Years") {
+             filteredData = data.filter((d: any) => d.year === selectedYear);
+        }
+
+        const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+        const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+        const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+        
+        setStats({
+            placed: placedCount,
+            totalEligible: totalEligible,
+            percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0,
+            higherStudies: higherStudiesCount
+        });
       };
 
       if (activeTab === "statistics") {
@@ -589,52 +690,63 @@ const AlumniDashboard = () => {
             <p className="text-sm text-muted-foreground mb-6">
               Add your competitive exam scores (GRE/TOEFL/GATE/CAT/IELTS/GMAT)
             </p>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleExamSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="alumni_exam_type">Exam Type</Label>
-                  <select
-                    id="alumni_exam_type"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  <Label htmlFor="alumni_exam_type">Exam Type *</Label>
+                  <Select 
+                    value={examFormData.examType}
+                    onValueChange={(value) => setExamFormData(prev => ({ ...prev, examType: value }))}
                   >
-                    <option value="">Select exam type</option>
-                    {examTypes.map((exam) => (
-                      <option key={exam} value={exam}>
-                        {exam}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select exam" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {examTypes.map((exam) => (
+                        <SelectItem key={exam} value={exam}>
+                          {exam}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="alumni_exam_score">Score/Percentile</Label>
+                  <Label htmlFor="alumni_exam_score">Score/Percentile *</Label>
                   <Input
                     id="alumni_exam_score"
                     placeholder="e.g., 320 or 99.5%"
+                    value={examFormData.score}
+                    onChange={(e) => setExamFormData(prev => ({ ...prev, score: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="alumni_exam_date">Exam Date</Label>
-                  <Input id="alumni_exam_date" type="date" />
+                  <Label htmlFor="alumni_exam_date">Exam Date *</Label>
+                  <Input 
+                    id="alumni_exam_date" 
+                    type="date"
+                    value={examFormData.examDate}
+                    onChange={(e) => setExamFormData(prev => ({ ...prev, examDate: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="alumni_exam_validity">Valid Until</Label>
-                  <Input id="alumni_exam_validity" type="date" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="alumni_score_report">Score Report (Optional)</Label>
-                  <Input
-                    id="alumni_score_report"
-                    type="file"
-                    accept=".pdf,.jpg,.png"
+                  <Input 
+                    id="alumni_exam_validity" 
+                    type="date"
+                    value={examFormData.validityPeriod}
+                    onChange={(e) => setExamFormData(prev => ({ ...prev, validityPeriod: e.target.value }))}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Upload your official score report
-                  </p>
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button type="submit">Add Exam Score</Button>
-                <Button type="button" variant="outline">
+                <Button type="submit" disabled={submittingExam}>
+                  {submittingExam ? 'Adding...' : 'Add Exam Score'}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setExamFormData({ examType: '', score: '', examDate: '', validityPeriod: '' })}
+                >
                   Clear Form
                 </Button>
               </div>
@@ -645,36 +757,36 @@ const AlumniDashboard = () => {
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 My Exam Scores
               </h3>
-              <div className="space-y-3">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">GRE</h4>
-                      <p className="text-sm text-muted-foreground">Score: 320</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 15 May 2024 • Valid until: 15 May 2029
-                      </p>
+              {examsLoading ? (
+                <p className="text-muted-foreground">Loading your exam scores...</p>
+              ) : myExams.length === 0 ? (
+                <p className="text-muted-foreground">No exam scores added yet. Add your first score above!</p>
+              ) : (
+                <div className="space-y-3">
+                  {myExams.filter(exam => exam && exam.id).map((exam) => (
+                    <div key={exam.id} className="bg-card border border-border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-foreground">{exam.examType || 'Unknown Exam'}</h4>
+                          <p className="text-sm text-muted-foreground">Score: {exam.score || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Date: {exam.examDate ? new Date(exam.examDate).toLocaleDateString() : 'N/A'}
+                            {exam.validityPeriod && ` • Valid until: ${new Date(exam.validityPeriod).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDeleteExam(exam.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </div>
+                  ))}
                 </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">TOEFL</h4>
-                      <p className="text-sm text-muted-foreground">Score: 110</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 20 Jun 2024 • Valid until: 20 Jun 2026
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}

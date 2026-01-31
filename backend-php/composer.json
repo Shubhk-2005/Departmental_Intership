@@ -5,6 +5,7 @@
     "require": {
         "php": ">=8.0",
         "kreait/firebase-php": "^7.0",
+        "google/cloud-firestore": "^1.43",
         "vlucas/phpdotenv": "^5.5"
     },
     "autoload": {

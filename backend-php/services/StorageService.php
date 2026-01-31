@@ -2,18 +2,18 @@
 /**
  * Storage Service
  * Handles Firebase Storage operations for file uploads
+ * Uses custom StorageRest client
  */
 
 require_once __DIR__ . '/../config/firebase.php';
 
 class StorageService
 {
-    private $bucket;
+    private $storage;
 
     public function __construct()
     {
-        $storage = storage();
-        $this->bucket = $storage->getBucket();
+        $this->storage = storage();
     }
 
     /**
@@ -39,20 +39,15 @@ class StorageService
         // Read file content
         $content = file_get_contents($file['tmp_name']);
 
-        // Upload to Firebase Storage
-        $object = $this->bucket->upload($content, [
-            'name' => $storagePath,
-            'metadata' => [
-                'contentType' => $file['type'],
-                'metadata' => [
-                    'originalName' => $file['name'],
-                    'uploadedAt' => (new DateTime())->format('c')
-                ]
-            ]
+        // Upload to Firebase Storage using REST
+        // Making file public so it can be viewed by frontend without signed URLs
+        $result = $this->storage->upload($storagePath, $content, [
+            'contentType' => $file['type'],
+            'predefinedAcl' => 'publicRead'
         ]);
 
-        // Generate signed URL (valid for 1 year)
-        $url = $this->getSignedUrl($storagePath);
+        // Get public URL
+        $url = $this->getPublicUrl($storagePath);
 
         return [
             'path' => $storagePath,
@@ -65,26 +60,24 @@ class StorageService
 
     /**
      * Get a signed URL for a file
+     * For now, returning public URL as we are using publicRead ACL
      */
     public function getSignedUrl(string $path, int $expiresInMinutes = 525600): string
     {
-        $object = $this->bucket->object($path);
-
-        $url = $object->signedUrl(
-            new DateTime('+' . $expiresInMinutes . ' minutes'),
-            ['version' => 'v4']
-        );
-
-        return $url;
+        return $this->getPublicUrl($path);
     }
 
     /**
-     * Get public URL for a file (if bucket is public)
+     * Get public URL for a file
      */
     public function getPublicUrl(string $path): string
     {
-        $bucketName = $this->bucket->name();
-        return "https://storage.googleapis.com/{$bucketName}/{$path}";
+        $bucketName = $this->storage->getBucketName();
+        // Allow spaces and special chars in path to be encoded, but slashes should remain
+        // Actually, GCS public URLs usually have just path encoded? 
+        // Let's safe encode.
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return "https://storage.googleapis.com/{$bucketName}/{$encodedPath}";
     }
 
     /**
@@ -93,8 +86,7 @@ class StorageService
     public function deleteFile(string $path): bool
     {
         try {
-            $object = $this->bucket->object($path);
-            $object->delete();
+            $this->storage->delete($path);
             return true;
         } catch (Exception $e) {
             error_log('Error deleting file: ' . $e->getMessage());
@@ -107,8 +99,12 @@ class StorageService
      */
     public function fileExists(string $path): bool
     {
-        $object = $this->bucket->object($path);
-        return $object->exists();
+        try {
+            $this->storage->getObject($path);
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
     }
 
     /**
@@ -116,18 +112,24 @@ class StorageService
      */
     public function listFiles(string $folder): array
     {
-        $objects = $this->bucket->objects(['prefix' => $folder . '/']);
+        try {
+            $result = $this->storage->listObjects($folder);
+            $files = [];
 
-        $files = [];
-        foreach ($objects as $object) {
-            $files[] = [
-                'name' => $object->name(),
-                'size' => $object->info()['size'] ?? 0,
-                'updated' => $object->info()['updated'] ?? null
-            ];
+            if (isset($result['items'])) {
+                foreach ($result['items'] as $item) {
+                    $files[] = [
+                        'name' => $item['name'],
+                        'size' => $item['size'] ?? 0,
+                        'updated' => $item['updated'] ?? null
+                    ];
+                }
+            }
+            return $files;
+        } catch (Exception $e) {
+            error_log('Error listing files: ' . $e->getMessage());
+            return [];
         }
-
-        return $files;
     }
 
     /**

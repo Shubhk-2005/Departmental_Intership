@@ -26,11 +26,12 @@ function verifyToken(): bool
     }
 
     try {
-        $auth = auth();
-        $verifiedToken = $auth->verifyIdToken($token);
+        // Use manual verification to bypass SDK crash
+        $firebase = firebase();
+        $payload = $firebase->verifyIdToken($token);
 
-        $uid = $verifiedToken->claims()->get('sub');
-        $email = $verifiedToken->claims()->get('email');
+        $uid = $payload['sub'];
+        $email = $payload['email'];
 
         // Get user from Firestore
         $userService = new UserService();
@@ -41,8 +42,8 @@ function verifyToken(): bool
             error_log("Creating user document for $email");
 
             // Get role from custom claims or default to 'student'
-            $role = $verifiedToken->claims()->get('role') ?? 'student';
-            $name = $verifiedToken->claims()->get('name') ?? explode('@', $email)[0];
+            $role = $payload['role'] ?? 'student';
+            $name = $payload['name'] ?? explode('@', $email)[0];
 
             $user = $userService->createUser([
                 'uid' => $uid,
@@ -52,17 +53,20 @@ function verifyToken(): bool
             ]);
         }
 
+        // Use JWT payload values for uid/email (guaranteed to exist)
+        // Use user document for role (with fallback to 'student')
         $authenticatedUser = [
-            'uid' => $user['uid'],
-            'email' => $user['email'],
-            'role' => $user['role']
+            'uid' => $uid,
+            'email' => $email,
+            'role' => $user['role'] ?? $payload['role'] ?? 'student'
         ];
 
         return true;
 
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         error_log('Authentication error: ' . $e->getMessage());
-        jsonError('Invalid or expired token', 403);
+        // Return 500 for non-auth errors to debug
+        jsonError('Authentication failed: ' . $e->getMessage(), 500);
         return false;
     }
 }

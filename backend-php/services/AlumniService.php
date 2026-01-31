@@ -1,32 +1,28 @@
 <?php
 /**
  * Alumni Service
- * Handles alumni profile operations
+ * Handles alumni profile operations using REST API
  */
 
 require_once __DIR__ . '/../config/firebase.php';
 
 class AlumniService
 {
-    private $collection = 'alumni';
+    private $collection = 'alumniProfiles';
 
     /**
      * Create a new alumni profile
      */
     public function createAlumniProfile(array $profileData): array
     {
-        $db = db();
+        $firestore = db();
         $now = new DateTime();
 
         $profile = array_merge($profileData, [
             'createdAt' => $now->format('c')
         ]);
 
-        $docRef = $db->collection($this->collection)->newDocument();
-        $docRef->set($profile);
-
-        $profile['id'] = $docRef->id();
-        return $profile;
+        return $firestore->createDocument($this->collection, $profile);
     }
 
     /**
@@ -34,22 +30,65 @@ class AlumniService
      */
     public function getPublicAlumni(): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->where('isPublic', '=', true);
+        $firestore = db();
 
-        $documents = $query->documents();
+        // Get all documents and filter client-side
+        // (REST API filtering requires composite indexes in Firestore)
+        $allAlumni = $firestore->getCollection($this->collection);
 
-        $alumni = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $alumni[] = $data;
+        // Filter for public profiles
+        $publicAlumni = array_filter($allAlumni, function ($alumni) {
+            return isset($alumni['isPublic']) && $alumni['isPublic'] === true;
+        });
+
+        return array_values($publicAlumni);
+    }
+
+    /**
+     * Get all alumni profiles (admin only)
+     */
+    public function getAllAlumni(): array
+    {
+        $firestore = db();
+        $allAlumni = $firestore->getCollection($this->collection);
+
+        // Sort by createdAt descending
+        usort($allAlumni, function ($a, $b) {
+            $dateA = $a['createdAt'] ?? '';
+            $dateB = $b['createdAt'] ?? '';
+            return strcmp($dateB, $dateA);
+        });
+
+        return $allAlumni;
+    }
+
+    /**
+     * Search alumni profiles
+     */
+    public function searchAlumni(string $query): array
+    {
+        $firestore = db();
+        $allAlumni = $firestore->getCollection($this->collection);
+
+        // Filter for public profiles that match search query
+        $filtered = array_filter($allAlumni, function ($alumni) use ($query) {
+            if (!isset($alumni['isPublic']) || $alumni['isPublic'] !== true) {
+                return false;
             }
-        }
 
-        return $alumni;
+            $query = strtolower($query);
+            $name = strtolower($alumni['name'] ?? '');
+            $company = strtolower($alumni['company'] ?? '');
+            $role = strtolower($alumni['role'] ?? '');
+            $year = $alumni['graduationYear'] ?? '';
+
+            return strpos($name, $query) !== false ||
+                strpos($company, $query) !== false ||
+                strpos($role, $query) !== false ||
+                strpos($year, $query) !== false;
+        });
+
+        return array_values($filtered);
     }
 
     /**
@@ -57,18 +96,14 @@ class AlumniService
      */
     public function getAlumniByUserId(string $userId): ?array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->where('userId', '=', $userId)
-            ->limit(1);
+        $firestore = db();
 
-        $documents = $query->documents();
+        // Get all documents and filter client-side
+        $allAlumni = $firestore->getCollection($this->collection);
 
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                return $data;
+        foreach ($allAlumni as $alumni) {
+            if (isset($alumni['userId']) && $alumni['userId'] === $userId) {
+                return $alumni;
             }
         }
 
@@ -80,17 +115,8 @@ class AlumniService
      */
     public function getAlumniById(string $id): ?array
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $snapshot = $docRef->snapshot();
-
-        if (!$snapshot->exists()) {
-            return null;
-        }
-
-        $data = $snapshot->data();
-        $data['id'] = $snapshot->id();
-        return $data;
+        $firestore = db();
+        return $firestore->getDocument($this->collection, $id);
     }
 
     /**
@@ -98,9 +124,8 @@ class AlumniService
      */
     public function updateAlumniProfile(string $id, array $updates): void
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $docRef->update($this->formatUpdates($updates));
+        $firestore = db();
+        $firestore->updateDocument($this->collection, $id, $updates);
     }
 
     /**
@@ -108,20 +133,7 @@ class AlumniService
      */
     public function deleteAlumniProfile(string $id): void
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($id);
-        $docRef->delete();
-    }
-
-    /**
-     * Format updates for Firestore update operation
-     */
-    private function formatUpdates(array $updates): array
-    {
-        $formatted = [];
-        foreach ($updates as $key => $value) {
-            $formatted[] = ['path' => $key, 'value' => $value];
-        }
-        return $formatted;
+        $firestore = db();
+        $firestore->deleteDocument($this->collection, $id);
     }
 }

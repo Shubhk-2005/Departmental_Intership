@@ -1,34 +1,29 @@
 <?php
 /**
  * Placement Service
- * Handles placement statistics operations
+ * Handles placement statistics operations using REST API
  */
 
 require_once __DIR__ . '/../config/firebase.php';
 
 class PlacementService
 {
-    private $collection = 'placementStats';
+    private $collection = 'placement_stats_yearly';
 
     /**
      * Get all placement statistics
      */
     public function getAllStats(): array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->orderBy('year', 'DESC');
+        $firestore = db();
+        $stats = $firestore->getCollection($this->collection);
 
-        $documents = $query->documents();
-
-        $stats = [];
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $stats[] = $data;
-            }
-        }
+        // Sort by year descending
+        usort($stats, function ($a, $b) {
+            $yearA = $a['year'] ?? '';
+            $yearB = $b['year'] ?? '';
+            return strcmp($yearB, $yearA);
+        });
 
         return $stats;
     }
@@ -38,22 +33,8 @@ class PlacementService
      */
     public function getLatestStats(): ?array
     {
-        $db = db();
-        $query = $db->collection($this->collection)
-            ->orderBy('year', 'DESC')
-            ->limit(1);
-
-        $documents = $query->documents();
-
-        foreach ($documents as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                return $data;
-            }
-        }
-
-        return null;
+        $stats = $this->getAllStats();
+        return !empty($stats) ? $stats[0] : null;
     }
 
     /**
@@ -61,17 +42,8 @@ class PlacementService
      */
     public function getStatsByYear(string $year): ?array
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($year);
-        $snapshot = $docRef->snapshot();
-
-        if (!$snapshot->exists()) {
-            return null;
-        }
-
-        $data = $snapshot->data();
-        $data['id'] = $snapshot->id();
-        return $data;
+        $firestore = db();
+        return $firestore->getDocument($this->collection, $year);
     }
 
     /**
@@ -79,11 +51,20 @@ class PlacementService
      */
     public function upsertPlacementStats(array $statsData): void
     {
-        $db = db();
+        $firestore = db();
         $year = $statsData['year'];
 
-        $docRef = $db->collection($this->collection)->document($year);
-        $docRef->set($statsData, ['merge' => true]);
+        // Check if document exists
+        $existing = $firestore->getDocument($this->collection, $year);
+
+        if ($existing) {
+            // Update existing document
+            $firestore->updateDocument($this->collection, $year, $statsData);
+        } else {
+            // Create new document with specific ID is not directly supported by our REST API
+            // We'll create a workaround by including the year in the document
+            $firestore->createDocument($this->collection, $statsData);
+        }
     }
 
     /**
@@ -91,8 +72,7 @@ class PlacementService
      */
     public function deleteStats(string $year): void
     {
-        $db = db();
-        $docRef = $db->collection($this->collection)->document($year);
-        $docRef->delete();
+        $firestore = db();
+        $firestore->deleteDocument($this->collection, $year);
     }
 }

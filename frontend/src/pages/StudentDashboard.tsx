@@ -21,7 +21,7 @@ import {
 import { useInternships, useCreateInternship } from "@/hooks/useInternships";
 import { useAlumni } from "@/hooks/useAlumni";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
@@ -95,55 +95,220 @@ const StudentDashboard = () => {
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [analyticsData, setAnalyticsData] = useState<any[]>([]); // Full data for charts
 
-  useEffect(() => {
-    // Fetch Drives
-    const q = query(collection(db, "placement_drives"), orderBy("postedAt", "desc"));
-    const unsubscribeDrives = onSnapshot(q, (snapshot) => {
-      const drivesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setDrives(drivesData);
-    });
+  // Competitive Exams State
+  const [myExams, setMyExams] = useState<any[]>([]);
+  const [examsLoading, setExamsLoading] = useState(false);
 
-    return () => unsubscribeDrives();
+  // Internship Form State
+  const [internshipFormData, setInternshipFormData] = useState({
+    companyName: '',
+    role: '',
+    domain: '',
+    duration: '',
+    status: 'Applied', // Default status
+    type: 'Off-campus',
+    stipendAmount: '',
+    stipendCurrency: 'INR',
+    startDate: '',
+    endDate: ''
+  });
+  const [submittingInternship, setSubmittingInternship] = useState(false);
+  const [examFormData, setExamFormData] = useState({
+    examType: '',
+    score: '',
+    examDate: '',
+    validityPeriod: ''
+  });
+  const [submittingExam, setSubmittingExam] = useState(false);
+
+  // Fetch user's competitive exam scores
+  useEffect(() => {
+    const fetchMyExams = async () => {
+      setExamsLoading(true);
+      try {
+        const response = await api.exams.getMyExams();
+        setMyExams(response.data.exams || []);
+      } catch (error) {
+        console.error('Error fetching exams:', error);
+      } finally {
+        setExamsLoading(false);
+      }
+    };
+
+    fetchMyExams();
+  }, []);
+
+  // Handle competitive exam form submission
+  const handleExamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!examFormData.examType || !examFormData.score || !examFormData.examDate) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setSubmittingExam(true);
+    try {
+      const response = await api.exams.create(examFormData);
+      toast.success('Exam score added successfully!');
+      // Add new exam to local state - safely handle response
+      const newExam = response.data?.exam;
+      if (newExam && newExam.id) {
+        setMyExams(prev => [newExam, ...prev]);
+      } else {
+        // Refresh the exams list to get the new exam
+        const refreshResponse = await api.exams.getMyExams();
+        setMyExams(refreshResponse.data?.exams || []);
+      }
+      // Reset form
+      setExamFormData({
+        examType: '',
+        score: '',
+        examDate: '',
+        validityPeriod: ''
+      });
+    } catch (error: any) {
+      console.error('Error adding exam:', error);
+      toast.error(error.response?.data?.error || 'Failed to add exam score');
+    } finally {
+      setSubmittingExam(false);
+    }
+  };
+
+  // Handle exam deletion
+  const handleDeleteExam = async (examId: string) => {
+    try {
+      await api.exams.delete(examId);
+      toast.success('Exam score deleted');
+      setMyExams(prev => prev.filter(exam => exam.id !== examId));
+    } catch (error: any) {
+      console.error('Error deleting exam:', error);
+      toast.error(error.response?.data?.error || 'Failed to delete exam');
+    }
+  };
+
+  const handleInternshipSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Basic validation
+    if (!selectedCategory || !internshipFormData.companyName || !internshipFormData.role || !internshipFormData.domain) {
+      toast.error('Please fill in all required fields (Category, Company, Role, Domain)');
+      return;
+    }
+
+    setSubmittingInternship(true);
+    
+    try {
+      const payload = {
+        ...internshipFormData,
+        category: selectedCategory,
+        // If "Internship", include internshipType (Paid/Unpaid)
+        ...(selectedCategory === 'Internship' && { 
+          internshipType: selectedInternshipType || 'Unpaid' 
+        }),
+        // Only include stipend if Paid
+        ...(selectedInternshipType !== 'Paid' && { 
+          stipendAmount: null, 
+          stipendCurrency: null 
+        })
+      };
+
+      await createInternship.mutateAsync(payload);
+      toast.success('Opportunity added successfully!');
+      
+      // Reset form
+      setInternshipFormData({
+        companyName: '',
+        role: '',
+        domain: '',
+        duration: '',
+        status: 'Applied',
+        type: 'Off-campus',
+        stipendAmount: '',
+        stipendCurrency: 'INR',
+        startDate: '',
+        endDate: ''
+      });
+      setSelectedCategory('');
+      setSelectedInternshipType('');
+      setActiveTab('view-internships');
+      
+    } catch (error: any) {
+      console.error('Error creating internship:', error);
+      toast.error(error.response?.data?.error || 'Failed to add opportunity');
+    } finally {
+      setSubmittingInternship(false);
+    }
+  };
+
+
+  useEffect(() => {
+    // Fetch Drives from PHP backend API
+    const fetchDrives = async () => {
+      try {
+        const response = await api.drives.getAll();
+        setDrives(response.data?.drives || []);
+      } catch (error) {
+        console.error('Error fetching drives:', error);
+      }
+    };
+    
+    fetchDrives();
   }, []);
 
   useEffect(() => {
       const fetchStats = async () => {
           try {
-              const recordsRef = collection(db, "placement_stats_yearly");
-              const snapshot = await getDocs(recordsRef);
-              const data = snapshot.docs.map(doc => doc.data());
+              // Try to get stats from PHP backend first
+              const response = await api.placements.getAllStats();
+              const data = response.data?.stats || [];
               
-              // Extract unique years
-              const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
-              setAvailableYears(years);
-              setAnalyticsData(data); // Store full data
-
-              // Filter
-              let filteredData = data;
-              if (selectedYear !== "All Years") {
-                  filteredData = data.filter((d: any) => d.year === selectedYear);
+              if (data.length === 0) {
+                // Fallback to Firestore if backend returns empty
+                const recordsRef = collection(db, "placement_stats_yearly");
+                const snapshot = await getDocs(recordsRef);
+                const firestoreData = snapshot.docs.map(doc => doc.data());
+                processStatsData(firestoreData);
+              } else {
+                processStatsData(data);
               }
-
-              // Calculate Aggregated Stats
-              const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
-              const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
-              const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
-              
-              const totalSuccess = placedCount + higherStudiesCount;
-              
-              setDbStats({
-                  placed: placedCount,
-                  totalEligible: totalEligible,
-                  higherStudies: higherStudiesCount,
-                  percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0
-              });
-
           } catch (error) {
               console.error("Error fetching stats:", error);
+              // Fallback to Firestore on error
+              try {
+                const recordsRef = collection(db, "placement_stats_yearly");
+                const snapshot = await getDocs(recordsRef);
+                const data = snapshot.docs.map(doc => doc.data());
+                processStatsData(data);
+              } catch (firestoreError) {
+                console.error("Firestore fallback also failed:", firestoreError);
+              }
           }
+      };
+      
+      const processStatsData = (data: any[]) => {
+        // Extract unique years
+        const years = Array.from(new Set(data.map((d: any) => d.year))).sort();
+        setAvailableYears(years as string[]);
+        setAnalyticsData(data); // Store full data
+
+        // Filter
+        let filteredData = data;
+        if (selectedYear !== "All Years") {
+            filteredData = data.filter((d: any) => d.year === selectedYear);
+        }
+
+        // Calculate Aggregated Stats
+        const placedCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.placed) || 0), 0);
+        const higherStudiesCount = filteredData.reduce((acc, curr: any) => acc + (Number(curr.higherStudies) || 0), 0);
+        const totalEligible = filteredData.reduce((acc, curr: any) => acc + (Number(curr.eligible) || 0), 0);
+        
+        setDbStats({
+            placed: placedCount,
+            totalEligible: totalEligible,
+            higherStudies: higherStudiesCount,
+            percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0
+        });
       };
 
       fetchStats();
@@ -424,11 +589,11 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               Add New Opportunity
             </h2>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleInternshipSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select onValueChange={setSelectedCategory}>
+                  <Label htmlFor="category">Category *</Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
@@ -441,7 +606,10 @@ const StudentDashboard = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Type</Label>
-                  <Select>
+                  <Select 
+                    value={internshipFormData.type} 
+                    onValueChange={(val) => setInternshipFormData(prev => ({ ...prev, type: val }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -452,16 +620,31 @@ const StudentDashboard = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="company">Company Name</Label>
-                  <Input id="company" placeholder="e.g., TCS, Infosys" />
+                  <Label htmlFor="company">Company Name *</Label>
+                  <Input 
+                    id="company" 
+                    placeholder="e.g., TCS, Infosys" 
+                    value={internshipFormData.companyName}
+                    onChange={(e) => setInternshipFormData(prev => ({ ...prev, companyName: e.target.value }))}
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role / Position</Label>
-                  <Input id="role" placeholder="e.g., Software Intern" />
+                  <Label htmlFor="role">Role / Position *</Label>
+                  <Input 
+                    id="role" 
+                    placeholder="e.g., Software Intern" 
+                    value={internshipFormData.role}
+                    onChange={(e) => setInternshipFormData(prev => ({ ...prev, role: e.target.value }))}
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="domain">Domain</Label>
-                  <Select>
+                  <Label htmlFor="domain">Domain *</Label>
+                  <Select 
+                    value={internshipFormData.domain} 
+                    onValueChange={(val) => setInternshipFormData(prev => ({ ...prev, domain: val }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select domain" />
                     </SelectTrigger>
@@ -476,14 +659,19 @@ const StudentDashboard = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="duration">Duration (if applicable)</Label>
-                  <Input id="duration" placeholder="e.g., 3 months" />
+                  <Input 
+                    id="duration" 
+                    placeholder="e.g., 3 months" 
+                    value={internshipFormData.duration}
+                    onChange={(e) => setInternshipFormData(prev => ({ ...prev, duration: e.target.value }))}
+                  />
                 </div>
 
                 {/* Internship Type - Only for Internship category */}
                 {selectedCategory === "Internship" && (
                   <div className="space-y-2">
                     <Label htmlFor="internshipType">Internship Type</Label>
-                    <Select onValueChange={setSelectedInternshipType}>
+                    <Select value={selectedInternshipType} onValueChange={setSelectedInternshipType}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
@@ -504,11 +692,16 @@ const StudentDashboard = () => {
                         id="stipendAmount"
                         type="number"
                         placeholder="e.g., 15000"
+                        value={internshipFormData.stipendAmount}
+                        onChange={(e) => setInternshipFormData(prev => ({ ...prev, stipendAmount: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="stipendCurrency">Currency</Label>
-                      <Select defaultValue="INR">
+                      <Select 
+                        value={internshipFormData.stipendCurrency} 
+                        onValueChange={(val) => setInternshipFormData(prev => ({ ...prev, stipendCurrency: val }))}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select currency" />
                         </SelectTrigger>
@@ -523,22 +716,6 @@ const StudentDashboard = () => {
                     </div>
                   </>
                 )}
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select onValueChange={setSelectedStatus}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {internshipStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
 
                 {/* Higher Studies LOR Section */}
                 {selectedCategory === "Higher Studies" && (
@@ -703,11 +880,14 @@ const StudentDashboard = () => {
             <h2 className="text-xl font-semibold text-foreground mb-6">
               Add Competitive Exam Score
             </h2>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleExamSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="examType">Exam Type</Label>
-                  <Select>
+                  <Label htmlFor="examType">Exam Type *</Label>
+                  <Select 
+                    value={examFormData.examType}
+                    onValueChange={(value) => setExamFormData(prev => ({ ...prev, examType: value }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select exam" />
                     </SelectTrigger>
@@ -721,35 +901,42 @@ const StudentDashboard = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="score">Score/Percentile</Label>
+                  <Label htmlFor="score">Score/Percentile *</Label>
                   <Input
                     id="score"
                     placeholder="e.g., 320 or 99.5%"
+                    value={examFormData.score}
+                    onChange={(e) => setExamFormData(prev => ({ ...prev, score: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="examDate">Exam Date</Label>
-                  <Input id="examDate" type="date" />
+                  <Label htmlFor="examDate">Exam Date *</Label>
+                  <Input 
+                    id="examDate" 
+                    type="date"
+                    value={examFormData.examDate}
+                    onChange={(e) => setExamFormData(prev => ({ ...prev, examDate: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="validityPeriod">Valid Until</Label>
-                  <Input id="validityPeriod" type="date" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="scoreReport">Score Report (Optional)</Label>
-                  <Input
-                    id="scoreReport"
-                    type="file"
-                    accept=".pdf,.jpg,.png"
+                  <Input 
+                    id="validityPeriod" 
+                    type="date"
+                    value={examFormData.validityPeriod}
+                    onChange={(e) => setExamFormData(prev => ({ ...prev, validityPeriod: e.target.value }))}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Upload your official score report
-                  </p>
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button type="submit">Add Exam Score</Button>
-                <Button type="button" variant="outline">
+                <Button type="submit" disabled={submittingExam}>
+                  {submittingExam ? 'Adding...' : 'Add Exam Score'}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setExamFormData({ examType: '', score: '', examDate: '', validityPeriod: '' })}
+                >
                   Clear Form
                 </Button>
               </div>
@@ -760,36 +947,36 @@ const StudentDashboard = () => {
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 My Exam Scores
               </h3>
-              <div className="space-y-3">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">GRE</h4>
-                      <p className="text-sm text-muted-foreground">Score: 320</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 15 May 2024 • Valid until: 15 May 2029
-                      </p>
+              {examsLoading ? (
+                <p className="text-muted-foreground">Loading your exam scores...</p>
+              ) : myExams.length === 0 ? (
+                <p className="text-muted-foreground">No exam scores added yet. Add your first score above!</p>
+              ) : (
+                <div className="space-y-3">
+                  {myExams.filter(exam => exam && exam.id).map((exam) => (
+                    <div key={exam.id} className="bg-card border border-border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-foreground">{exam.examType || 'Unknown Exam'}</h4>
+                          <p className="text-sm text-muted-foreground">Score: {exam.score || 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Date: {exam.examDate ? new Date(exam.examDate).toLocaleDateString() : 'N/A'}
+                            {exam.validityPeriod && ` • Valid until: ${new Date(exam.validityPeriod).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDeleteExam(exam.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </div>
+                  ))}
                 </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-semibold text-foreground">TOEFL</h4>
-                      <p className="text-sm text-muted-foreground">Score: 110</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Date: 20 Jun 2024 • Valid until: 20 Jun 2026
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Edit
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}

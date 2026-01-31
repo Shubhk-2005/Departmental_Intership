@@ -7,12 +7,13 @@
  */
 
 // Error reporting for development
+// Error reporting for development - FORCE ON
 error_reporting(E_ALL);
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 ini_set('log_errors', 1);
 
-// Start output buffering
-ob_start();
+// Disable output buffering to ensure errors are seen
+// ob_start();
 
 // Set content type to JSON
 header('Content-Type: application/json');
@@ -61,7 +62,8 @@ if (empty($pathParts) || (count($pathParts) === 1 && $pathParts[0] === 'index.ph
             '/api/internships' => 'Internship applications',
             '/api/alumni' => 'Alumni profiles',
             '/api/placements' => 'Placement statistics',
-            '/api/upload' => 'File uploads'
+            '/api/upload' => 'File uploads',
+            '/api/exams' => 'Competitive exam scores'
         ]
     ]);
 }
@@ -74,6 +76,7 @@ if ($pathParts[0] !== 'api') {
 // Get the API resource (auth, drives, etc.)
 $resource = $pathParts[1] ?? '';
 
+// Route to appropriate handler
 // Route to appropriate handler
 try {
     switch ($resource) {
@@ -107,10 +110,15 @@ try {
             handleUploadRoutes($method, $pathParts);
             break;
 
+        case 'exams':
+            require_once __DIR__ . '/routes/competitiveExams.php';
+            handleExamsRoutes($method, $pathParts);
+            break;
+
         default:
             jsonError('Route not found', 404);
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log('Server error: ' . $e->getMessage());
     jsonError(
         'Internal server error',
@@ -120,4 +128,4 @@ try {
 }
 
 // Flush output buffer
-ob_end_flush();
+// ob_end_flush();
