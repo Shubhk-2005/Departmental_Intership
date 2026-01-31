@@ -107,7 +107,7 @@ class FirebaseConfig
             'aud' => 'https://oauth2.googleapis.com/token',
             'iat' => $now,
             'exp' => $exp,
-            'scope' => 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.database'
+            'scope' => 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/devstorage.full_control'
         ]));
 
         $signatureInput = $header . '.' . $payload;

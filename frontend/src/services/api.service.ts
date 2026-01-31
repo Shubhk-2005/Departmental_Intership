@@ -35,7 +35,10 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response) {
       // Server responded with error status
-      console.error('API Error:', error.response.data);
+      // Don't log 404s as errors, as they are often expected (e.g., profile not found)
+      if (error.response.status !== 404) {
+        console.error('API Error:', error.response.data);
+      }
       
       if (error.response.status === 401) {
         // Unauthorized - redirect to login
