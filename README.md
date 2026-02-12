@@ -23,7 +23,7 @@ A comprehensive web application designed to streamline the internship and placem
 - **Alumni Directory**: Connect with other alumni and expand your network.
 - **Profile**: Update professional achievements and higher studies details.
 - **Stats**: View department placement statistics.
-- **Mentorship**: (Future Scope) Guide current students.
+- **Off-Campus Placements**: Share your success stories.
 
 ## 🛠️ Tech Stack
 
@@ -33,35 +33,35 @@ A comprehensive web application designed to streamline the internship and placem
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **UI Components**: [Shadcn UI](https://ui.shadcn.com/)
-- **State/Data Fetching**: [TanStack Query (React Query)](https://tanstack.com/query/latest)
-- **Routing**: [React Router](https://reactrouter.com/)
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **Charts**: [Recharts](https://recharts.org/)
+- **State Management**: [TanStack Query](https://tanstack.com/query/latest)
 
 ### Backend & Services
 
-- **Server**: PHP 8.x on XAMPP/Apache
+- **Server**: PHP 8.x (Works with built-in server or Apache/XAMPP)
 - **Database**: [Firebase Firestore](https://firebase.google.com/)
 - **Authentication**: [Firebase Auth](https://firebase.google.com/)
-- **File Storage**: [Firebase Storage](https://firebase.google.com/)
+- **File Storage**: [Cloudinary](https://cloudinary.com/) (for media/docs) & Firebase Storage
 
 ---
 
-## 📦 Installation & Setup (First Time Only)
+## 📦 Installation & Setup
 
 ### Prerequisites
 
-- [XAMPP](https://www.apachefriends.org/) installed
-- [Node.js](https://nodejs.org/) installed
+- **Node.js** (v16+)
+- **PHP** (v8.0+) - via XAMPP or standalone
+- **Composer** (PHP dependency manager)
 
-### Step 1: Clone the Repository
+### Step 1: Clone Repository
 
 ```bash
 git clone <repository-url>
 cd Departmental_Intership
 ```
 
-### Step 2: Install Frontend Dependencies
+### Step 2: Install Dependencies
+
+**Frontend:**
 
 ```bash
 cd frontend
@@ -69,93 +69,76 @@ npm install
 cd ..
 ```
 
-### Step 3: Setup PHP Backend
-
-#### 🍎 Mac Instructions
+**Backend:**
 
 ```bash
-# Copy backend-php to XAMPP htdocs
-sudo cp -r backend-php /Applications/XAMPP/htdocs/internship-api
-
-# Set permissions
-sudo chmod -R 755 /Applications/XAMPP/htdocs/internship-api
-
-# Install PHP dependencies
-cd /Applications/XAMPP/htdocs/internship-api
-curl -sS https://getcomposer.org/installer | /Applications/XAMPP/xamppfiles/bin/php
-/Applications/XAMPP/xamppfiles/bin/php composer.phar install --ignore-platform-req=ext-sodium
+cd backend-php
+composer install
+cd ..
 ```
 
-#### 🪟 Windows Instructions
+### Step 3: Environment Configuration
 
-1.  **Copy backend-php folder**:
-
-    - Open File Explorer
-    - Copy the `backend-php` folder
-    - Paste it to: `C:\xampp\htdocs\`
-    - Rename the pasted folder to `internship-api`
-
-2.  **Install PHP dependencies**:
-
-    - Open Command Prompt (cmd) as Administrator
-    - Run these commands:
-
-    ```cmd
-    cd C:\xampp\htdocs\internship-api
-
-    # Download Composer
-    php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-    php composer-setup.php
-    php -r "unlink('composer-setup.php');"
-
-    # Install dependencies
-    php composer.phar install --ignore-platform-req=ext-sodium
-    ```
-
-### Step 4: Configure Environment
-
-Create/edit `.env` file in the project root:
+Create a `.env` file in the **project root** directory:
 
 ```env
+# Firebase Configuration
 VITE_FIREBASE_API_KEY=your_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
 VITE_FIREBASE_PROJECT_ID=your_project_id
 VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
-VITE_API_URL=http://localhost/internship-api/api
+
+# Backend URL (for frontend to connect to PHP)
+VITE_API_URL=http://127.0.0.1:8000/api
+
+# Cloudinary Configuration (Required for file uploads)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 ---
 
 ## 🏃 Running the Project
 
-### Step 1: Start XAMPP
+### Option A: One-Click Start (Recommended)
 
-1.  Open **XAMPP Control Panel**
-2.  Click **Start** next to **Apache**
-3.  Wait until it shows green "Running"
+**🍎 macOS / Linux:**
+Run the startup script in terminal:
 
-### Step 2: Test Backend (Optional)
-
-Open browser and visit: `http://localhost/internship-api/`
-
-Expected output:
-
-```json
-{ "message": "Internship Portal PHP Backend API", "status": "running" }
+```bash
+./start-dev.sh
 ```
 
-### Step 3: Start Frontend
+_(You may need to run `chmod +x start-dev.sh` first)_
+
+**🪟 Windows:**
+Double-click `start-dev.bat` or run in CMD:
+
+```cmd
+start-dev.bat
+```
+
+Use `http://localhost:8080` (or the port shown) to access the application.
+
+### Option B: Manual Start
+
+**1. Start PHP Backend:**
+
+```bash
+cd backend-php
+php -S 127.0.0.1:8000 router.php
+```
+
+**2. Start React Frontend:**
+(Open a new terminal)
 
 ```bash
 cd frontend
 npm run dev
 ```
-
-### Step 4: Open in Browser
-
-Visit: **http://localhost:8080** (or the URL shown in terminal)
 
 ---
 
@@ -164,32 +147,13 @@ Visit: **http://localhost:8080** (or the URL shown in terminal)
 ```
 ├── frontend/           # React + Vite frontend
 ├── backend-php/        # PHP backend source code
-├── backend/            # (Legacy) Node.js backend
+    ├── config/         # Configuration (Cloudinary, Firebase)
+    ├── routes/         # API Endpoint definitions
+    ├── services/       # Business logic services
+    ├── router.php      # Main entry point for PHP server
 ├── .env                # Environment variables
 └── README.md           # This file
 ```
-
----
-
-## 🔄 Updating PHP Backend
-
-If you make changes to `backend-php/`, copy the updated files to XAMPP:
-
-**Mac:**
-
-```bash
-sudo cp -r backend-php/* /Applications/XAMPP/htdocs/internship-api/
-```
-
-**Windows:**
-
-- Manually copy files from `backend-php` to `C:\xampp\htdocs\internship-api\`
-
----
-
-## 🤝 Contribution
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
