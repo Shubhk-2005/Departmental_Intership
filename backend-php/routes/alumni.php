@@ -63,11 +63,12 @@ function handleGetAllAlumni(): void
 
 /**
  * GET /api/alumni/my-profile
- * Get current user's alumni profile (alumni only)
+ * Get current user's alumni profile (alumni/student/admin)
  */
 function handleGetMyProfile(): void
 {
-    if (!authWithRole('alumni')) {
+    // Allow students to check if they have a profile (e.g. while applying)
+    if (!authWithRole('alumni', 'student', 'admin')) {
         return;
     }
 
@@ -89,11 +90,12 @@ function handleGetMyProfile(): void
 
 /**
  * POST /api/alumni
- * Create alumni profile (alumni only)
+ * Create alumni profile (alumni/student)
  */
 function handleCreateAlumniProfile(): void
 {
-    if (!authWithRole('alumni')) {
+    // Allow students to create their initial alumni profile
+    if (!authWithRole('alumni', 'student', 'admin')) {
         return;
     }
 
@@ -123,6 +125,12 @@ function handleCreateAlumniProfile(): void
             'linkedinUrl' => $body['linkedinUrl'] ?? null,
             'isPublic' => $body['isPublic'] ?? true
         ]);
+
+        // Auto-promote user to 'alumni' role if they are currently a student
+        if ($authUser['role'] === 'student') {
+            $userService = new UserService();
+            $userService->updateUser($authUser['uid'], ['role' => 'alumni']);
+        }
 
         jsonResponse([
             'message' => 'Alumni profile created successfully',

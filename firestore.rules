@@ -112,5 +112,21 @@ service cloud.firestore {
       // Users can delete their own exam scores
       allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
+
+    // Off-Campus Placements collection
+    match /offCampusPlacements/{placementId} {
+      // Alumni can read their own placements, admins can read all
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Only alumni can create placements
+      allow create: if hasRole('alumni') &&
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Alumni can update their own placements, admins can update all
+      allow update: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Alumni can delete their own placements, admins can delete all
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
   }
 }

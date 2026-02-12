@@ -62,6 +62,7 @@ if (empty($pathParts) || (count($pathParts) === 1 && $pathParts[0] === 'index.ph
             '/api/internships' => 'Internship applications',
             '/api/alumni' => 'Alumni profiles',
             '/api/placements' => 'Placement statistics',
+            '/api/off-campus-placements' => 'Off-campus placements',
             '/api/upload' => 'File uploads',
             '/api/exams' => 'Competitive exam scores'
         ]
@@ -115,8 +116,13 @@ try {
             handleExamsRoutes($method, $pathParts);
             break;
 
+        case 'off-campus-placements':
+            require_once __DIR__ . '/routes/offCampusPlacements.php';
+            handleOffCampusPlacementRoutes($method, $pathParts);
+            break;
+
         default:
-            jsonError('Route not found', 404);
+            jsonError("Route not found: '$resource' (Path: " . implode('/', $pathParts) . ")", 404);
     }
 } catch (Throwable $e) {
     error_log('Server error: ' . $e->getMessage());

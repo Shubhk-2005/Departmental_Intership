@@ -23,7 +23,13 @@ import {
   TrendingUp,
   Award,
   Filter,
+  Briefcase,
 } from "lucide-react";
+import { useMyOffCampusPlacements, useDeleteOffCampusPlacement } from "@/hooks/useOffCampusPlacements";
+import { OffCampusPlacementForm } from "@/components/forms/OffCampusPlacementForm";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Trash2, FileText } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -48,6 +54,11 @@ const AlumniDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isHigherStudies, setIsHigherStudies] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [placementFormOpen, setPlacementFormOpen] = useState(false);
+  
+  // Off-campus placements hooks
+  const { data: myPlacements = [], isLoading: placementsLoading } = useMyOffCampusPlacements();
+  const deletePlacement = useDeleteOffCampusPlacement();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -71,6 +82,11 @@ const AlumniDashboard = () => {
   const [studentIdFile, setStudentIdFile] = useState<File | null>(null);
   const [admitCardFile, setAdmitCardFile] = useState<File | null>(null);
   const [lorFile, setLorFile] = useState<File | null>(null);
+  
+  // Existing uploaded file URLs from database
+  const [existingStudentIdUrl, setExistingStudentIdUrl] = useState<string | null>(null);
+  const [existingAdmitCardUrl, setExistingAdmitCardUrl] = useState<string | null>(null);
+  const [existingLorUrl, setExistingLorUrl] = useState<string | null>(null);
 
   // Stats State
   const [stats, setStats] = useState({
@@ -266,6 +282,22 @@ const AlumniDashboard = () => {
         higherStudiesCountry: myProfile.higherStudiesCountry || "",
         lorFacultyName: myProfile.lorFacultyName || "",
       });
+      
+      // Load profile photo if it exists
+      if (myProfile.profilePhotoUrl) {
+        setProfileImage(myProfile.profilePhotoUrl);
+      }
+      
+      // Load existing file URLs
+      if (myProfile.studentIdCardUrl) {
+        setExistingStudentIdUrl(myProfile.studentIdCardUrl);
+      }
+      if (myProfile.admitCardUrl) {
+        setExistingAdmitCardUrl(myProfile.admitCardUrl);
+      }
+      if (myProfile.lorDocumentUrl) {
+        setExistingLorUrl(myProfile.lorDocumentUrl);
+      }
     } else if (userData) {
       // Pre-fill with user data
       setFormData(prev => ({
@@ -342,6 +374,13 @@ const AlumniDashboard = () => {
 
       console.log('Preparing profile data...');
 
+      // Ensure we have a valid user ID
+      const currentUserId = user?.uid;
+      if (!currentUserId) {
+        toast.error('Authentication error: Please log out and log in again');
+        return;
+      }
+
       // Prepare profile data
       const profileData: any = {
         name: formData.name,
@@ -349,9 +388,9 @@ const AlumniDashboard = () => {
         company: formData.company,
         role: formData.role,
         linkedinUrl: formData.linkedinUrl || '',
-        email: userData?.email || '',
+        email: user?.email || '',
         isPublic: formData.isPublic,
-        userId: userData?.uid || "unknown",
+        userId: currentUserId,
         ...fileUrls,
       };
 
@@ -405,6 +444,17 @@ const AlumniDashboard = () => {
     }
   };
 
+  const handleDeletePlacement = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this placement record?")) return;
+    
+    try {
+      await deletePlacement.mutateAsync(id);
+      toast.success("Placement deleted successfully");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to delete placement");
+    }
+  };
+
   const navItems = [
     {
       value: "profile",
@@ -415,6 +465,11 @@ const AlumniDashboard = () => {
       value: "directory",
       label: "Alumni Directory",
       icon: <Users className="h-4 w-4" />,
+    },
+    {
+      value: "off-campus-placements",
+      label: "Off-Campus Placements",
+      icon: <Briefcase className="h-4 w-4" />,
     },
     {
       value: "competitive-exams",
@@ -483,14 +538,17 @@ const AlumniDashboard = () => {
                       <UserCircle className="h-16 w-16 text-muted-foreground" />
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="space-y-1">
                     <Input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/jpg,image/png"
                       onChange={handleImageUpload}
                       className="w-full max-w-xs"
                       id="profile-upload"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      JPG, PNG only • Max 2MB
+                    </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -608,10 +666,18 @@ const AlumniDashboard = () => {
                         <Input
                           id="studentIdFile"
                           type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="application/pdf,image/jpeg,image/jpg,image/png"
                           onChange={(e) => setStudentIdFile(e.target.files?.[0] || null)}
                         />
-                        <p className="text-xs text-muted-foreground">Upload your student ID card</p>
+                        {studentIdFile ? (
+                          <p className="text-xs text-green-600 dark:text-green-400">✓ Selected: {studentIdFile.name}</p>
+                        ) : existingStudentIdUrl ? (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            ✓ <a href={existingStudentIdUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">View uploaded file</a>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">PDF, JPG, PNG • Max 5MB</p>
+                        )}
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="admitCardFile">
@@ -620,12 +686,20 @@ const AlumniDashboard = () => {
                         <Input
                           id="admitCardFile"
                           type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="application/pdf,image/jpeg,image/jpg,image/png"
                           onChange={(e) => setAdmitCardFile(e.target.files?.[0] || null)}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Upload your admit card or offer letter
-                        </p>
+                        {admitCardFile ? (
+                          <p className="text-xs text-green-600 dark:text-green-400">✓ Selected: {admitCardFile.name}</p>
+                        ) : existingAdmitCardUrl ? (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            ✓ <a href={existingAdmitCardUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">View uploaded file</a>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            PDF, JPG, PNG • Max 5MB
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lorFacultyName">LOR - Faculty Name</Label>
@@ -644,12 +718,20 @@ const AlumniDashboard = () => {
                         <Input
                           id="lorFile"
                           type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="application/pdf,image/jpeg,image/jpg,image/png"
                           onChange={(e) => setLorFile(e.target.files?.[0] || null)}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Upload your Letter of Recommendation (PDF preferred)
-                        </p>
+                        {lorFile ? (
+                          <p className="text-xs text-green-600 dark:text-green-400">✓ Selected: {lorFile.name}</p>
+                        ) : existingLorUrl ? (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                            ✓ <a href={existingLorUrl} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">View uploaded file</a>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            PDF, JPG, PNG • Max 5MB
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -836,6 +918,114 @@ const AlumniDashboard = () => {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Off-Campus Placements Tab */}
+        {activeTab === "off-campus-placements" && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>My Off-Campus Placements</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Track and share your off-campus placement journey
+                    </p>
+                  </div>
+                  <Button onClick={() => setPlacementFormOpen(true)} className="gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Add Placement
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {placementsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" />
+                  </div>
+                ) : myPlacements.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Briefcase className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground mb-4">
+                      You haven't added any off-campus placements yet.
+                    </p>
+                    <Button onClick={() => setPlacementFormOpen(true)} variant="outline">
+                      Add Your First Placement
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Company</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Package</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Joining Date</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {myPlacements.map((placement: any) => (
+                          <TableRow key={placement.id}>
+                            <TableCell className="font-medium">
+                              {placement.companyName}
+                            </TableCell>
+                            <TableCell>{placement.companyLocation}</TableCell>
+                            <TableCell>{placement.jobRole}</TableCell>
+                            <TableCell>
+                              {placement.package ? `${placement.package} LPA` : "N/A"}
+                            </TableCell>
+                            <TableCell>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {placement.employmentType}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {new Date(placement.joiningDate).toLocaleDateString("en-IN", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => window.open(placement.companyIdCardUrl, "_blank")}
+                                  title="View ID Card"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeletePlacement(placement.id)}
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <OffCampusPlacementForm
+              open={placementFormOpen}
+              onOpenChange={setPlacementFormOpen}
+              alumniName={myProfile?.name || formData.name}
+              graduationYear={myProfile?.graduationYear || formData.graduationYear}
+            />
           </div>
         )}
         {/* Statistics Tab */}

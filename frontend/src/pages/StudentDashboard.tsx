@@ -78,6 +78,7 @@ const StudentDashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedInternshipType, setSelectedInternshipType] = useState<string>("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
 
   // Drives State
   const [drives, setDrives] = useState<any[]>([]);
@@ -332,6 +333,9 @@ const StudentDashboard = () => {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Track the selected file
+      setProfilePhotoFile(file);
+      
       // Create preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -343,11 +347,13 @@ const StudentDashboard = () => {
       try {
         toast.info("Uploading profile picture...");
         const response = await api.upload.uploadProfilePhoto(file);
-        console.log('Profile photo uploaded:', response.data.file.url);
-        toast.success("Profile picture uploaded successfully!");
-      } catch (error) {
-        console.error('Profile photo upload failed:', error);
-        toast.error("Failed to upload profile picture");
+        if (response.data?.file?.url) {
+          toast.success("Profile picture uploaded!");
+          setProfileImage(response.data.file.url);
+        }
+      } catch (error: any) {
+        console.error("Upload error:", error);
+        toast.error(error.response?.data?.error || "Failed to upload profile picture");
       }
     }
   };
@@ -1131,13 +1137,19 @@ const StudentDashboard = () => {
                   <Input
                     id="profile-upload"
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png"
                     onChange={handleImageUpload}
                     className="max-w-xs"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Recommended: Square JPG, PNG. Max 2MB.
-                  </p>
+                  {profilePhotoFile ? (
+                    <p className="text-xs text-green-600 dark:text-green-400">✓ Selected: {profilePhotoFile.name}</p>
+                  ) : profileImage ? (
+                    <p className="text-xs text-blue-600 dark:text-blue-400">✓ Profile photo uploaded</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      JPG, PNG only • Max 2MB
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

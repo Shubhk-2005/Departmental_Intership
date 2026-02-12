@@ -22,6 +22,11 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // For FormData, remove Content-Type header so axios can set it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error) => {
@@ -135,6 +140,18 @@ export const api = {
       });
     },
     deleteFile: (path: string) => apiClient.delete(`/upload/${encodeURIComponent(path)}`),
+  },
+
+  // Off-Campus Placements endpoints
+  offCampusPlacements: {
+    getAll: () => apiClient.get('/off-campus-placements'),
+    getMyPlacements: () => apiClient.get('/off-campus-placements/my-placements'),
+    create: (data: FormData) => apiClient.post('/off-campus-placements', data),
+    update: (id: string, data: any) => apiClient.put(`/off-campus-placements/${id}`, data),
+    delete: (id: string) => apiClient.delete(`/off-campus-placements/${id}`),
+    exportCSV: () => apiClient.get('/off-campus-placements/export-csv', { 
+      responseType: 'blob' 
+    }),
   },
 };
 

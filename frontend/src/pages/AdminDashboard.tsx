@@ -72,6 +72,7 @@ import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsChar
 import { db, auth } from "@/lib/firebase"; // Ensure auth is imported
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
+import { OffCampusPlacementsTab } from "@/components/admin/OffCampusPlacementsTab";
 
 // Drives Tab Component
 const DrivesTab = () => {
@@ -532,107 +533,7 @@ const TestimonialsTab = () => {
   );
 };
 
-// Competitive Exams Tab Component
-// Competitive Exams Tab Component
-const CompetitiveExamsTab = () => {
-  const [exams, setExams] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Fetch all exams (admin view)
-    const q = query(
-      collection(db, "competitive_exams"),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setExams(data);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this record?")) return;
-    try {
-      await deleteDoc(doc(db, "competitive_exams", id));
-      toast.success("Record deleted");
-    } catch (error) {
-      console.error("Error deleting record:", error);
-      toast.error("Failed to delete record");
-    }
-  };
-
-  const studentExams = exams.filter(exam => exam.role === 'student');
-  const alumniExams = exams.filter(exam => exam.role === 'alumni');
-
-  const ExamTable = ({ title, data }: { title: string, data: any[] }) => (
-    <div className="bg-card rounded-lg border border-border p-6 shadow-sm mb-6">
-      <h3 className="font-semibold text-foreground mb-4">
-        {title} ({data.length})
-      </h3>
-      {data.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Name</th>
-                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Exam Type</th>
-                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Score</th>
-                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Exam Date</th>
-                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Valid Until</th>
-                <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((exam) => (
-                <tr key={exam.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                  <td className="py-3 px-4 text-sm text-foreground font-medium">{exam.studentName}</td>
-                  <td className="py-3 px-4 text-sm text-foreground">{exam.examType}</td>
-                  <td className="py-3 px-4 text-sm text-foreground">{exam.score}</td>
-                  <td className="py-3 px-4 text-sm text-muted-foreground">{exam.examDate}</td>
-                  <td className="py-3 px-4 text-sm text-muted-foreground">{exam.validityPeriod}</td>
-                  <td className="py-3 px-4">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                      onClick={() => handleDelete(exam.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
-          No {title.toLowerCase()} found.
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-foreground">
-          Competitive Exam Scores
-        </h2>
-      </div>
-
-      <ExamTable title="Student Exam Records" data={studentExams} />
-      <ExamTable title="Alumni Exam Records" data={alumniExams} />
-    </div>
-  );
-};
 
 // IMS Uploads Tab Component
 const IMSUploadsTab = () => {
@@ -1577,15 +1478,16 @@ const AdminDashboard = () => {
       icon: <GraduationCap className="h-4 w-4" />,
     },
     {
+      value: "off-campus-placements",
+      label: "Off-Campus Placements",
+      icon: <Briefcase className="h-4 w-4" />,
+    },
+    {
       value: "placement-records",
       label: "Placement Records",
       icon: <FileSpreadsheet className="h-4 w-4" />,
     },
-    {
-      value: "competitive-exams",
-      label: "Competitive Exams",
-      icon: <Award className="h-4 w-4" />,
-    },
+
     {
       value: "ims-uploads",
       label: "IMS Uploads",
@@ -2040,11 +1942,13 @@ const AdminDashboard = () => {
         {/* Alumni Directory Tab */}
         {activeTab === "alumni" && <AlumniTab />}
 
+        {/* Off-Campus Placements Tab */}
+        {activeTab === "off-campus-placements" && <OffCampusPlacementsTab />}
+
         {/* Placement Records Tab */}
         {activeTab === "placement-records" && <PlacementRecordsTab />}
 
-        {/* Competitive Exams Tab */}
-        {activeTab === "competitive-exams" && <CompetitiveExamsTab />}
+
 
         {/* IMS Uploads Tab */}
         {activeTab === "ims-uploads" && <IMSUploadsTab />}
