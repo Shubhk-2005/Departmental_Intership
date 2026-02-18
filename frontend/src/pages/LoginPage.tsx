@@ -45,9 +45,9 @@ const LoginPage = () => {
     alumni: {
       title: "Alumni Login",
       description: "Access the alumni portal",
-      placeholder: "alumni@fcrit.ac.in",
+      placeholder: "you@example.com",
       dashboardPath: "/dashboard/alumni",
-      domain: "@fcrit.ac.in"
+      domain: "" 
     },
   };
 
@@ -72,7 +72,7 @@ const LoginPage = () => {
     }
 
     // Optional: Keep domain validation if desired, or remove to allow any email in Firebase
-    if (!email.endsWith(config.domain)) {
+    if (config.domain && !email.endsWith(config.domain)) {
       setError(`Email must be a valid ${role} email ending with ${config.domain}`);
       setLoading(false);
       return;
@@ -298,6 +298,17 @@ const LoginPage = () => {
               >
                 Forgot password?
               </button>
+              
+              {role === 'alumni' && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground">
+                    New Alumni?{" "}
+                    <Link to="/signup/alumni" className="text-primary hover:underline font-medium">
+                      Register here
+                    </Link>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,132 +1,16 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Helper function to check if user has specific role
-    function hasRole(role) {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-    
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return hasRole('admin');
-    }
-    
-    // Helper function to check if user is the owner
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
 
-    // Users collection
     match /users/{userId} {
-      // Users can read their own document, admins can read all
-      allow read: if isOwner(userId) || isAdmin();
-      
-      // Only allow creation by the user themselves or admin
-      allow create: if isOwner(userId) || isAdmin();
-      
-      // Users can update their own document, admins can update all
-      allow update: if isOwner(userId) || isAdmin();
-      
-      // Only admins can delete
-      allow delete: if isAdmin();
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == userId;
     }
 
-    // Drives collection
-    match /drives/{driveId} {
-      // Anyone can read active drives (for public landing page)
-      allow read: if true;
-      
-      // Only admins can create, update, or delete drives
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
 
-    // Internships collection
-    match /internships/{internshipId} {
-      // Students can read their own internships, admins can read all
-      allow read: if isOwner(resource.data.studentId) || isAdmin();
-      
-      // Students and admins can create internships
-      allow create: if isAuthenticated() && 
-                      (hasRole('student') || isAdmin()) &&
-                      request.resource.data.studentId == request.auth.uid;
-      
-      // Students can update their own internships, admins can update all
-      allow update: if isOwner(resource.data.studentId) || isAdmin();
-      
-      // Students can delete their own internships, admins can delete all
-      allow delete: if isOwner(resource.data.studentId) || isAdmin();
-    }
-
-    // Alumni Profiles collection
-    match /alumniProfiles/{profileId} {
-      // Anyone can read public profiles
-      allow read: if resource.data.isPublic == true || 
-                    isOwner(resource.data.userId) || 
-                    isAdmin();
-      
-      // Only alumni and admins can create profiles
-      allow create: if hasRole('alumni') || isAdmin();
-      
-      // Alumni can update their own profile, admins can update all
-      allow update: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Alumni can delete their own profile, admins can delete all
-      allow delete: if isOwner(resource.data.userId) || isAdmin();
-    }
-
-    // Placement Stats collection
-    match /placementStats/{year} {
-      // Anyone can read placement stats (public data)
-      allow read: if true;
-      
-      // Only admins can create, update, or delete stats
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // Competitive Exams collection
-    match /competitiveExams/{examId} {
-      // Users can read their own exam scores
-      // Admins can read student exam scores only (not alumni)
-      allow read: if isOwner(resource.data.userId) || 
-                    (isAdmin() && resource.data.userRole == 'student');
-      
-      // Students and Alumni can create their own exam scores
-      allow create: if isAuthenticated() && 
-                      (hasRole('student') || hasRole('alumni')) &&
-                      request.resource.data.userId == request.auth.uid;
-      
-      // Users can update their own exam scores
-      allow update: if isOwner(resource.data.userId);
-      
-      // Users can delete their own exam scores
-      allow delete: if isOwner(resource.data.userId) || isAdmin();
-    }
-
-    // Off-Campus Placements collection
-    match /offCampusPlacements/{placementId} {
-      // Alumni can read their own placements, admins can read all
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Only alumni can create placements
-      allow create: if hasRole('alumni') &&
-                      request.resource.data.userId == request.auth.uid;
-      
-      // Alumni can update their own placements, admins can update all
-      allow update: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Alumni can delete their own placements, admins can delete all
-      allow delete: if isOwner(resource.data.userId) || isAdmin();
-    }
   }
 }

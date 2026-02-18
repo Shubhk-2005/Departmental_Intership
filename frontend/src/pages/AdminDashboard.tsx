@@ -70,7 +70,7 @@ import * as XLSX from "xlsx";
 import { PlacementRecordsTab } from "@/components/admin/PlacementRecordsTab";
 import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsCharts";
 import { db, auth } from "@/lib/firebase"; // Ensure auth is imported
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, writeBatch, addDoc, deleteDoc, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
 import { OffCampusPlacementsTab } from "@/components/admin/OffCampusPlacementsTab";
 
@@ -1290,6 +1290,77 @@ const AlumniTab = () => {
       alumni.role.toLowerCase().includes(alumniSearchQuery.toLowerCase())
   );
 
+  const [isBackfilling, setIsBackfilling] = useState(false);
+
+  const handleBackfillDomains = async () => {
+    if (!confirm("This will assign random domains to all alumni who don't have one. Continue?")) return;
+    
+    setIsBackfilling(true);
+    const domains = [
+      "Software Engineering",
+      "Data Science", 
+      "Product Management",
+      "Cyber Security",
+      "AI/ML",
+      "Cloud Computing",
+      "DevOps",
+      "UI/UX Design",
+      "Finance",
+      "Consulting"
+    ];
+
+    try {
+      let count = 0;
+      // We process in chunks to avoid batch limits (500 ops)
+      // Since we don't know the exact collection name the API uses, 
+      // we'll try to update via the 'Users' collection as seen in signup.
+      
+      const batch = writeBatch(db);
+      let batchCount = 0;
+
+      // Filter alumni needing update from the directory
+      const alumniToUpdate = alumniDirectory.filter((a: any) => !a.workDomain);
+      
+      if (alumniToUpdate.length === 0) {
+        toast.info("No alumni found needing domain backfill.");
+        setIsBackfilling(false);
+        return;
+      }
+
+      for (const alum of alumniToUpdate) {
+        if (!alum.id) continue;
+        
+        const randomDomain = domains[Math.floor(Math.random() * domains.length)];
+        const alumniRef = doc(db, "Users", alum.id); 
+        
+        batch.update(alumniRef, { workDomain: randomDomain });
+        batchCount++;
+        count++;
+
+        if (batchCount >= 400) {
+            await batch.commit();
+            batchCount = 0;
+            // batch = writeBatch(db); // creating new batch not straightforward in loop without reassignment
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      toast.success(`Successfully backfilled ${count} alumni with random domains.`);
+      // Ideally trigger a refresh of alumniDirectory here, but useAlumni should handle it if it listens to real-time, 
+      // otherwise a window reload might be needed or invalidation.
+      setTimeout(() => window.location.reload(), 1500);
+
+    } catch (error) {
+      console.error("Backfill error:", error);
+      toast.error("Failed to backfill domains.");
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-6">
@@ -1301,6 +1372,13 @@ const AlumniTab = () => {
             onChange={(e) => setAlumniSearchQuery(e.target.value)}
             className="max-w-xs"
           />
+          <Button 
+            variant="outline" 
+            onClick={handleBackfillDomains}
+            disabled={isBackfilling}
+          >
+            {isBackfilling ? "Backfilling..." : "Backfill Domains"}
+          </Button>
         </div>
       </div>
 

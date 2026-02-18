@@ -9,7 +9,7 @@ import { examTypes, currencies } from "@/data/dummyData";
 import { useAlumni, useMyAlumniProfile, useCreateAlumniProfile, useUpdateAlumniProfile } from "@/hooks/useAlumni";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, onSnapshot, updateDoc } from "firebase/firestore";
 import {
   LayoutDashboard,
   UserCircle,
@@ -52,6 +52,7 @@ const AlumniDashboard = () => {
 
   const [activeTab, setActiveTab] = useState("profile");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDomain, setSelectedDomain] = useState("All Domains");
   const [isHigherStudies, setIsHigherStudies] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [placementFormOpen, setPlacementFormOpen] = useState(false);
@@ -66,6 +67,7 @@ const AlumniDashboard = () => {
     graduationYear: "",
     company: "",
     role: "",
+    workDomain: "",
     linkedinUrl: "",
     email: "",
     isPublic: true,
@@ -272,6 +274,7 @@ const AlumniDashboard = () => {
         graduationYear: myProfile.graduationYear,
         company: myProfile.company,
         role: myProfile.role,
+        workDomain: myProfile.workDomain || "",
         linkedinUrl: myProfile.linkedinUrl || "",
         email: userData?.email || "",
         isPublic: myProfile.isPublic !== undefined ? myProfile.isPublic : true,
@@ -387,6 +390,7 @@ const AlumniDashboard = () => {
         graduationYear: formData.graduationYear,
         company: formData.company,
         role: formData.role,
+        workDomain: formData.workDomain,
         linkedinUrl: formData.linkedinUrl || '',
         email: user?.email || '',
         isPublic: formData.isPublic,
@@ -488,11 +492,21 @@ const AlumniDashboard = () => {
     },
   ];
 
+  // Extract unique domains
+  const availableDomains = ["All Domains", ...Array.from(new Set(alumniDirectory.map((a: any) => a.workDomain).filter(Boolean)))];
+
   const filteredAlumni = alumniDirectory.filter(
-    (alumni) =>
-      alumni.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      alumni.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      alumni.role.toLowerCase().includes(searchQuery.toLowerCase())
+    (alumni) => {
+      const matchesSearch = 
+        alumni.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alumni.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        alumni.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (alumni.workDomain && alumni.workDomain.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesDomain = selectedDomain === "All Domains" || alumni.workDomain === selectedDomain;
+
+      return matchesSearch && matchesDomain;
+    }
   );
 
   return (
@@ -590,6 +604,15 @@ const AlumniDashboard = () => {
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                       required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="workDomain">Work Domain</Label>
+                    <Input
+                      id="workDomain"
+                      placeholder="e.g., Cyber Security, AI/ML"
+                      value={formData.workDomain}
+                      onChange={(e) => setFormData({ ...formData, workDomain: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
@@ -754,6 +777,7 @@ const AlumniDashboard = () => {
                       graduationYear: myProfile.graduationYear,
                       company: myProfile.company,
                       role: myProfile.role,
+                      workDomain: myProfile.workDomain || "",
                       linkedinUrl: myProfile.linkedinUrl || "",
                       email: userData?.email || "",
                       isPublic: myProfile.isPublic !== undefined ? myProfile.isPublic : true,
@@ -895,6 +919,20 @@ const AlumniDashboard = () => {
                   className="pl-10"
                 />
               </div>
+              <div className="w-full sm:w-[200px]">
+                <Select value={selectedDomain} onValueChange={setSelectedDomain}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by Domain" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableDomains.map((domain: string) => (
+                      <SelectItem key={domain} value={domain}>
+                        {domain}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -905,6 +943,7 @@ const AlumniDashboard = () => {
                   graduationYear={alumni.graduationYear}
                   company={alumni.company}
                   role={alumni.role}
+                  workDomain={alumni.workDomain}
                   linkedinUrl={alumni.linkedinUrl}
                 />
               ))}

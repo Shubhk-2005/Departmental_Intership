@@ -14,6 +14,7 @@ interface AlumniCardProps {
   graduationYear: string;
   company: string;
   role: string;
+  workDomain?: string;
   linkedinUrl?: string;
   email?: string;
 }
@@ -23,6 +24,7 @@ const AlumniCard = ({
   graduationYear,
   company,
   role,
+  workDomain,
   linkedinUrl,
   email,
 }: AlumniCardProps) => {
@@ -46,6 +48,13 @@ const AlumniCard = ({
                 <Briefcase className="h-4 w-4" />
                 <span className="truncate">{role || "N/A"} {company && `at ${company}`}</span>
               </div>
+              {workDomain && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                  <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                    {workDomain}
+                  </span>
+                </div>
+              )}
               <div className="mt-3 flex items-center gap-2 text-sm text-primary opacity-0 group-hover:opacity-100 transition-opacity">
                 <Eye className="h-4 w-4" />
                 <span>Click to view full profile</span>

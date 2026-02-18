@@ -1093,6 +1093,7 @@ const StudentDashboard = () => {
                     graduationYear={alumni.graduationYear}
                     company={alumni.company}
                     role={alumni.role}
+                    workDomain={alumni.workDomain}
                     linkedinUrl={alumni.linkedinUrl}
                   />
                 ))}

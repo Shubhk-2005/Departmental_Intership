@@ -9,6 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import AlumniDashboard from "./pages/AlumniDashboard";
+import AlumniSignupPage from "./pages/AlumniSignupPage";
 import NotFound from "./pages/NotFound";
 import MaintenancePage from "./pages/MaintenancePage";
 
@@ -81,6 +82,7 @@ const App = () => (
               }
             />
             <Route path="/maintenance" element={<MaintenancePage />} />
+            <Route path="/signup/alumni" element={<AlumniSignupPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
