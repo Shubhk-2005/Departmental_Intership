@@ -69,6 +69,7 @@ import { MessageSquare, Trash2, FileSpreadsheet, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
 import { PlacementRecordsTab } from "@/components/admin/PlacementRecordsTab";
 import PlacementAnalyticsCharts from "@/components/charts/PlacementAnalyticsCharts";
+import InternshipAnalyticsCharts from "@/components/charts/InternshipAnalyticsCharts";
 import { db, auth } from "@/lib/firebase"; // Ensure auth is imported
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, writeBatch, addDoc, deleteDoc, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { updatePassword } from "firebase/auth";
@@ -1404,6 +1405,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedYear, setSelectedYear] = useState("All Years");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
+  const [internshipsViewMode, setInternshipsViewMode] = useState<"csv" | "analytics">("csv");
 
   const [internships, setInternships] = useState<any[]>([]); // Real data from API
 
@@ -1603,38 +1605,42 @@ const AdminDashboard = () => {
       const higherStudies = filteredAnalyticsData.reduce((acc, curr) => acc + (Number(curr.higherStudies) || 0), 0); 
       
       // Overall Placement Rate (Total Placed / Total Eligible) * 100
-      const percentage = eligible > 0 ? Math.round((placed / eligible) * 100) : 0;
+      const percentage = eligible > 0 ? Math.min(100, Math.round((placed / eligible) * 100)) : 0;
 
-      // Avg Yearly Placement Rate
+      // User Preference: Avg Yearly Placement Rate = (Sum of Rate of Each Year) / Count of Years
+      // This gives equal weight to each year regardless of batch size
+      let totalYearlyRates = 0;
+      let yearCount = 0;
 
+      filteredAnalyticsData.forEach(d => {
+        const e = Number(d.eligible) || 0;
+        const p = Number(d.placed) || 0;
+        const h = Number(d.higherStudies) || 0;
+        
+        if (e > 0) {
+          // Calculate success rate for this specific year (capping at 100%)
+          const yearlyRate = Math.min(100, ((p + h) / e) * 100);
+          totalYearlyRates += yearlyRate;
+          yearCount++;
+        }
+      });
 
-    // Avg Yearly Placement Rate = (Sum of Rate of Each Year) / Count of Years
-    // This gives equal weight to each year regardless of batch size
-    let totalYearlyRates = 0;
-    let yearCount = 0;
-
-    filteredAnalyticsData.forEach(d => {
-      const e = Number(d.eligible) || 0;
-      const p = Number(d.placed) || 0;
-      if (e > 0) {
-        totalYearlyRates += (p / e) * 100;
-        yearCount++;
-      }
-    });
-
-    const avgYearlyRate = yearCount > 0 ? Math.round(totalYearlyRates / yearCount) : 0;
+      const avgYearlyRate = yearCount > 0 
+        ? Math.round(totalYearlyRates / yearCount) 
+        : 0;
 
     return {
       placed,
       total: eligible,
       percentage,
       higherStudies,
-      avgYearlyRate // New metric
+      avgYearlyRate // Now represents true Success Rate
     };
   };
 
   const filteredStats = getAggregatedStats();
   const hiddenReportRef = useRef<HTMLDivElement>(null);
+  const hiddenInternshipReportRef = useRef<HTMLDivElement>(null);
 
   // Download Report Logic
   const downloadAnalyticsReport = async () => {
@@ -1651,6 +1657,39 @@ const AdminDashboard = () => {
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
 
       pdf.save(`Analytics_Report_${selectedYear}.pdf`);
+      toast.success("Report downloaded successfully");
+    } catch (err) {
+      console.error("PDF Gen Error:", err);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
+  const downloadInternshipAnalyticsReport = async () => {
+    if (!hiddenInternshipReportRef.current) return;
+    try {
+      const canvas = await html2canvas(hiddenInternshipReportRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      if (pdfHeight > pdf.internal.pageSize.getHeight()) {
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        let heightLeft = pdfHeight;
+        let position = 0;
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+        while (heightLeft > 0) {
+          position = heightLeft - pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, "PNG", 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+        }
+      } else {
+        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      }
+
+      pdf.save(`Internship_Analytics_Report.pdf`);
       toast.success("Report downloaded successfully");
     } catch (err) {
       console.error("PDF Gen Error:", err);
@@ -1916,98 +1955,211 @@ const AdminDashboard = () => {
                 <p className="mt-1">Department of Computer Engineering</p>
               </div>
             </div>
-
           </div>
         )}
 
         {/* Internship Management Table */}
         {activeTab === "internships" && (
-          <div className="form-section">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <h2 className="text-xl font-semibold text-foreground">
-                Internship Management
-              </h2>
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border border-border">
+              <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-start sm:items-center">
+                <h2 className="text-xl font-semibold text-foreground mr-4">
+                  Internship Management
+                </h2>
+                <div className="flex bg-muted p-1 rounded-lg">
+                  <button
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      internshipsViewMode === "csv"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10"
+                    }`}
+                    onClick={() => setInternshipsViewMode("csv")}
+                  >
+                    Data View
+                  </button>
+                  <button
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      internshipsViewMode === "analytics"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10"
+                    }`}
+                    onClick={() => setInternshipsViewMode("analytics")}
+                  >
+                    Analytics View
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-2 w-full sm:w-auto">
-                <Select
-                  value={selectedStatus}
-                  onValueChange={setSelectedStatus}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {placementStatuses.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  onClick={handleExportInternships}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
+                {internshipsViewMode === "csv" ? (
+                  <>
+                    <Select
+                      value={selectedStatus}
+                      onValueChange={setSelectedStatus}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {placementStatuses.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={handleExportInternships}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={downloadInternshipAnalyticsReport}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Student Name
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Roll No.
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Company
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Domain
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {internships.map((intern) => (
-                    <tr
-                      key={intern.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/50"
-                    >
-                      <td className="py-3 px-4 text-foreground font-medium">
-                        {intern.studentName}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {intern.rollNumber || intern.studentEmail || "N/A"}
-                      </td>
-                      <td className="py-3 px-4 text-foreground">
-                        {intern.companyName}
-                      </td>
-                      <td className="py-3 px-4 text-muted-foreground">
-                        {intern.domain}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${intern.status === "Completed"
-                            ? "bg-success/10 text-success"
-                            : intern.status === "Ongoing"
-                              ? "bg-info/10 text-info"
-                              : "bg-warning/10 text-warning"
-                            }`}
-                        >
-                          {intern.status}
-                        </span>
-                      </td>
+
+            {internshipsViewMode === "csv" ? (
+              <div className="overflow-x-auto bg-card rounded-lg border border-border">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left py-3 px-4 font-semibold text-foreground text-sm uppercase tracking-wider">
+                        Student Name
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground text-sm uppercase tracking-wider">
+                        Roll No.
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground text-sm uppercase tracking-wider">
+                        Company
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground text-sm uppercase tracking-wider">
+                        Domain
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-foreground text-sm uppercase tracking-wider">
+                        Status
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {internships.map((intern) => (
+                      <tr
+                        key={intern.id}
+                        className="hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-sm text-foreground">
+                          {intern.studentName}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {intern.rollNumber || intern.studentEmail || "N/A"}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-foreground">
+                          {intern.companyName}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {intern.domain}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              intern.status === "Completed"
+                                ? "bg-success/10 text-success"
+                                : intern.status === "Ongoing"
+                                ? "bg-info/10 text-info"
+                                : "bg-warning/10 text-warning"
+                            }`}
+                          >
+                            {intern.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                 {/* VISIBLE CHART CONTAINER */}
+                 <div className="bg-background rounded-md">
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                        <p className="text-sm text-muted-foreground">Total Internships</p>
+                        <p className="text-2xl font-bold">{internships.length}</p>
+                      </div>
+                      <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                        <p className="text-sm text-muted-foreground">Ongoing</p>
+                        <p className="text-2xl font-bold text-info">
+                          {internships.filter(i => i.status === "Ongoing").length}
+                        </p>
+                      </div>
+                      <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                        <p className="text-sm text-muted-foreground">Completed</p>
+                        <p className="text-2xl font-bold text-success">
+                           {internships.filter(i => i.status === "Completed").length}
+                        </p>
+                      </div>
+                      <div className="bg-card p-4 rounded-lg border shadow-sm text-center">
+                        <p className="text-sm text-muted-foreground">Applied</p>
+                        <p className="text-2xl font-bold text-warning">
+                          {internships.filter(i => i.status === "Applied").length}
+                        </p>
+                      </div>
+                   </div>
+                   <InternshipAnalyticsCharts data={internships} />
+                 </div>
+
+                 {/* HIDDEN REPORT CONTAINER (For PDF Generation Only) */}
+                 <div
+                   ref={hiddenInternshipReportRef}
+                   style={{ position: 'absolute', top: '-10000px', left: '-10000px', width: '1200px' }}
+                   className="space-y-6 bg-white p-8"
+                 >
+                    <div className="mb-4 text-center border-b pb-4">
+                      <h2 className="text-3xl font-bold text-black">Internship Analytics Report</h2>
+                      <p className="text-gray-600 mt-2">Comprehensive Report</p>
+                      <p className="text-gray-500 text-sm mt-1">Generated on {new Date().toLocaleDateString('en-US')}</p>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-6 mb-8">
+                       <div className="border p-4 rounded-lg text-center bg-gray-50">
+                          <p className="text-sm text-gray-500">Total Internships</p>
+                          <p className="text-3xl font-bold text-black">{internships.length}</p>
+                       </div>
+                       <div className="border p-4 rounded-lg text-center bg-gray-50">
+                          <p className="text-sm text-gray-500">Ongoing</p>
+                          <p className="text-3xl font-bold text-blue-600">
+                            {internships.filter(i => i.status === "Ongoing").length}
+                          </p>
+                       </div>
+                       <div className="border p-4 rounded-lg text-center bg-gray-50">
+                          <p className="text-sm text-gray-500">Completed</p>
+                          <p className="text-3xl font-bold text-green-600">
+                            {internships.filter(i => i.status === "Completed").length}
+                          </p>
+                       </div>
+                       <div className="border p-4 rounded-lg text-center bg-gray-50">
+                          <p className="text-sm text-gray-500">Applied</p>
+                          <p className="text-3xl font-bold text-amber-500">
+                             {internships.filter(i => i.status === "Applied").length}
+                          </p>
+                       </div>
+                    </div>
+
+                    <InternshipAnalyticsCharts data={internships} />
+
+                    <div className="text-center text-gray-500 text-sm border-t-2 border-gray-300 pt-6 mt-8">
+                       <p>This report was automatically generated by the Internship Management System</p>
+                       <p className="mt-1">Department of Computer Engineering</p>
+                    </div>
+                 </div>
+              </div>
+            )}
           </div>
         )}
 

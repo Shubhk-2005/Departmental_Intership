@@ -88,56 +88,31 @@ class FirebaseConfig
         return $this->credentials['private_key'];
     }
 
-    /**
-     * Get access token for REST API calls
-     */
     public function getAccessToken(): string
     {
         if ($this->accessToken && time() < $this->tokenExpiry - 60) {
             return $this->accessToken;
         }
 
-        $now = time();
-        $exp = $now + 3600;
+        $scopes = [
+            'https://www.googleapis.com/auth/datastore',
+            'https://www.googleapis.com/auth/firebase.database',
+            'https://www.googleapis.com/auth/cloud-platform',
+            'https://www.googleapis.com/auth/devstorage.full_control'
+        ];
 
-        $header = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
-        $payload = base64_encode(json_encode([
-            'iss' => $this->credentials['client_email'],
-            'sub' => $this->credentials['client_email'],
-            'aud' => 'https://oauth2.googleapis.com/token',
-            'iat' => $now,
-            'exp' => $exp,
-            'scope' => 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/devstorage.full_control'
-        ]));
+        $serviceAccountPath = __DIR__ . '/../serviceAccountKey.json';
+        $credentials = new \Google\Auth\Credentials\ServiceAccountCredentials($scopes, $serviceAccountPath);
 
-        $signatureInput = $header . '.' . $payload;
-        openssl_sign($signatureInput, $signature, $this->credentials['private_key'], 'sha256');
-        $jwt = $signatureInput . '.' . base64_encode($signature);
+        $token = $credentials->fetchAuthToken();
 
-        // Exchange JWT for access token
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://oauth2.googleapis.com/token');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            'assertion' => $jwt
-        ]));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200) {
-            throw new Exception('Failed to get access token: ' . $response);
+        if (isset($token['access_token'])) {
+            $this->accessToken = $token['access_token'];
+            $this->tokenExpiry = time() + ($token['expires_in'] ?? 3600);
+            return $this->accessToken;
         }
 
-        $data = json_decode($response, true);
-        $this->accessToken = $data['access_token'];
-        $this->tokenExpiry = $now + ($data['expires_in'] ?? 3600);
-
-        return $this->accessToken;
+        throw new Exception('Failed to get access token: ' . json_encode($token));
     }
 
     /**

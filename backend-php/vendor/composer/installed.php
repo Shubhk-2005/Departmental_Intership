@@ -3,7 +3,7 @@
         'name' => 'internship-portal/backend-php',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'dfc096938ca4f12180cc662a03444d7b77c30052',
+        'reference' => '563f620b634a05bb009c6fa17a9aec619dde290e',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -202,7 +202,7 @@
         'internship-portal/backend-php' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'dfc096938ca4f12180cc662a03444d7b77c30052',
+            'reference' => '563f620b634a05bb009c6fa17a9aec619dde290e',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

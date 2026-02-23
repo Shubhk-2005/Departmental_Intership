@@ -65,6 +65,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/services/api.service";
+import TransitionToAlumniModal from "@/components/modals/TransitionToAlumniModal";
 
 const StudentDashboard = () => {
   // Fetch data from database using custom hooks
@@ -79,6 +80,9 @@ const StudentDashboard = () => {
   const [selectedInternshipType, setSelectedInternshipType] = useState<string>("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  
+  // Transition to Alumni State
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
 
   // Drives State
   const [drives, setDrives] = useState<any[]>([]);
@@ -319,7 +323,7 @@ const StudentDashboard = () => {
             placed: placedCount,
             totalEligible: totalEligible,
             higherStudies: higherStudiesCount,
-            percentage: totalEligible > 0 ? Math.round((placedCount / totalEligible) * 100) : 0
+            percentage: totalEligible > 0 ? Math.min(100, Math.round(((placedCount + higherStudiesCount) / totalEligible) * 100)) : 0
         });
       };
 
@@ -404,6 +408,27 @@ const StudentDashboard = () => {
       onTabChange={setActiveTab}
     >
       <div className="space-y-8">
+        {/* Transition Banner - Mocked to always show for UI test */}
+        <div className="bg-primary/10 border border-primary p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/20 p-2 rounded-full">
+              <GraduationCap className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-primary">Graduating soon? 🎉</h3>
+              <p className="text-sm text-muted-foreground">
+                Update to a personal email to keep access to your account and become an Alumni!
+              </p>
+            </div>
+          </div>
+          <Button 
+            onClick={() => setShowTransitionModal(true)}
+            className="whitespace-nowrap w-full sm:w-auto"
+          >
+            Transition to Alumni
+          </Button>
+        </div>
+
         {/* Welcome Section */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">
@@ -1226,6 +1251,14 @@ const StudentDashboard = () => {
           </div>
         )}
       </div>
+      
+      {/* Transition Modal */}
+      <TransitionToAlumniModal 
+        isOpen={showTransitionModal}
+        onClose={() => setShowTransitionModal(false)}
+        uid={user?.uid || ""}
+        currentEmail={userData?.email || user?.email || ""}
+      />
     </DashboardLayout>
   );
 };
