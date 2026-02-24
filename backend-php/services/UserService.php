@@ -97,4 +97,30 @@ class UserService
         $user = $this->getUserById($uid);
         return $user !== null;
     }
+
+    /**
+     * Get student user by college email
+     * Used during alumni registration to look up and transfer student data
+     */
+    public function getUserByCollegeEmail(string $collegeEmail): ?array
+    {
+        $firestore = db();
+        $allUsers = $firestore->getCollection($this->collection);
+
+        foreach ($allUsers as $user) {
+            // Check the dedicated collegeEmail field first
+            if (isset($user['collegeEmail']) && strtolower($user['collegeEmail']) === strtolower($collegeEmail)) {
+                return $user;
+            }
+            // Fallback: check if the primary email IS the college email (original student accounts)
+            if (isset($user['email']) && strtolower($user['email']) === strtolower($collegeEmail)) {
+                // Only return if role is student (to avoid alumni/admin conflicts)
+                if (isset($user['role']) && $user['role'] === 'student') {
+                    return $user;
+                }
+            }
+        }
+
+        return null;
+    }
 }

@@ -307,11 +307,31 @@ class FirestoreRest
     }
 
     /**
-     * Update a document
+     * Set a document with a specific ID (creates or overwrites)
+     */
+    public function setDocument(string $collection, string $docId, array $data): void
+    {
+        $url = "{$this->baseUrl}/{$collection}/{$docId}";
+        $fields = $this->convertToFirestoreFields($data);
+
+        // PATCH without updateMask replaces the entire document, acting as a set/upsert
+        $this->request('PATCH', $url, ['fields' => $fields]);
+    }
+
+    /**
+     * Update a document (partial update using updateMask)
      */
     public function updateDocument(string $collection, string $docId, array $data): void
     {
-        $url = "{$this->baseUrl}/{$collection}/{$docId}";
+        // Build updateMask query params so only specified fields are updated
+        // Without this, Firestore REST API replaces the ENTIRE document
+        $maskParams = [];
+        foreach (array_keys($data) as $field) {
+            $maskParams[] = 'updateMask.fieldPaths=' . urlencode($field);
+        }
+        $maskQuery = implode('&', $maskParams);
+
+        $url = "{$this->baseUrl}/{$collection}/{$docId}?{$maskQuery}";
         $fields = $this->convertToFirestoreFields($data);
 
         $this->request('PATCH', $url, ['fields' => $fields]);

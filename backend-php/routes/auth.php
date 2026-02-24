@@ -129,6 +129,185 @@ function handleGetMe(): void
 }
 
 /**
+ * GET /api/auth/lookup-student
+ * Look up a student record by college email (used during alumni registration)
+ * No auth required — only returns non-sensitive profile data
+ */
+function handleLookupStudent(): void
+{
+    $collegeEmail = $_GET['collegeEmail'] ?? '';
+
+    if (empty($collegeEmail)) {
+        jsonError('collegeEmail query parameter is required', 400);
+        return;
+    }
+
+    if (!filter_var($collegeEmail, FILTER_VALIDATE_EMAIL)) {
+        jsonError('Invalid email format', 400);
+        return;
+    }
+
+    try {
+        $userService = new UserService();
+        $student = $userService->getUserByCollegeEmail($collegeEmail);
+
+        if (!$student) {
+            jsonError('No student account found with this college email. Please make sure you are using the email registered in the student portal.', 404);
+            return;
+        }
+
+        // Return only the fields needed to pre-fill the alumni profile
+        jsonResponse([
+            'found' => true,
+            'student' => [
+                'uid' => $student['uid'] ?? $student['id'] ?? null,
+                'name' => $student['name'] ?? null,
+                'department' => $student['department'] ?? null,
+                'graduationYear' => $student['graduationYear'] ?? null,
+                'rollNumber' => $student['rollNumber'] ?? null,
+                'collegeEmail' => $collegeEmail,
+            ]
+        ]);
+
+    } catch (Exception $e) {
+        error_log('Lookup student error: ' . $e->getMessage());
+        jsonError('Failed to look up student record', 500);
+    }
+}
+
+/**
+ * PUT /api/auth/profile
+ * Update the authenticated user's profile information
+ */
+function handleUpdateProfile(): void
+{
+    if (!verifyToken()) {
+        return;
+    }
+    $authUser = getAuthUser();
+    $body = getJsonBody();
+
+    // Whitelist of fields a student can update
+    $allowedFields = [
+        'name',
+        'phone',
+        'department',
+        'graduationYear',
+        'rollNumber',
+        'linkedinUrl',
+        'githubUrl',
+        'skills',
+        'bio',
+        'address',
+        'cgpa',
+        'semester',
+        'profilePhotoUrl'
+    ];
+
+    $updates = [];
+    foreach ($allowedFields as $field) {
+        if (array_key_exists($field, $body)) {
+            $updates[$field] = $body[$field];
+        }
+    }
+
+    if (empty($updates)) {
+        jsonError('No valid fields to update', 400);
+        return;
+    }
+
+    try {
+        $userService = new UserService();
+        $userService->updateUser($authUser['uid'], $updates);
+
+        // Re-fetch updated user
+        $updatedUser = $userService->getUserById($authUser['uid']);
+
+        jsonResponse([
+            'message' => 'Profile updated successfully',
+            'user' => $updatedUser
+        ]);
+
+    } catch (Exception $e) {
+        error_log('Profile update error: ' . $e->getMessage());
+        jsonError('Failed to update profile', 500);
+    }
+}
+
+/**
+ * Handle transition from student to alumni
+ */
+function handleTransitionToAlumni(): void
+{
+    if (!verifyToken()) {
+        return;
+    }
+    $authUser = getAuthUser();
+    $body = getJsonBody();
+
+    $newEmail = $body['newEmail'] ?? '';
+    $company = $body['company'] ?? '';
+    $jobRole = $body['role'] ?? '';
+
+    if (empty($newEmail) || !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+        jsonError('Valid new email is required', 400);
+        return;
+    }
+
+    try {
+        $userService = new UserService();
+        $studentData = $userService->getUserById($authUser['uid']);
+
+        if (!$studentData || ($studentData['role'] ?? '') !== 'student') {
+            jsonError('User is not a student', 403);
+            return;
+        }
+
+        $oldCollegeEmail = $studentData['email'] ?? $authUser['email'];
+
+        // 1. Update Firebase Auth Email via Admin SDK (bypasses verification requirement)
+        $auth = FirebaseConfig::getInstance()->getAuth();
+        $auth->changeUserEmail($authUser['uid'], $newEmail);
+
+        // 2. Update Users document (role to alumni, email)
+        $userUpdates = [
+            'email' => $newEmail,
+            // Keep old college email for reference, or if it already exists, don't overwrite
+            'collegeEmail' => $studentData['collegeEmail'] ?? $oldCollegeEmail,
+            'role' => 'alumni'
+        ];
+        $userService->updateUser($authUser['uid'], $userUpdates);
+
+        // 3. Create Alumni Profile Document
+        $firestore = db();
+        $alumniData = [
+            'userId' => $authUser['uid'],
+            'name' => $studentData['name'] ?? '',
+            'department' => $studentData['department'] ?? '',
+            'graduationYear' => $studentData['graduationYear'] ?? '',
+            'rollNumber' => $studentData['rollNumber'] ?? '',
+            'collegeEmail' => $studentData['collegeEmail'] ?? $oldCollegeEmail,
+            'email' => $newEmail,
+            'company' => $company,
+            'role' => $jobRole,
+            'workDomain' => '',
+            'isPublic' => true,
+            'createdAt' => (new DateTime())->format('c'),
+            'profilePhotoUrl' => $studentData['profilePhotoUrl'] ?? ''
+        ];
+        $firestore->setDocument('alumniProfiles', $authUser['uid'], $alumniData);
+
+        jsonResponse([
+            'message' => 'Transition successful',
+            'newEmail' => $newEmail
+        ]);
+    } catch (Exception $e) {
+        error_log('Transition error: ' . $e->getMessage());
+        jsonError('Failed to transition to alumni: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
  * Route handler for auth endpoints
  */
 function handleAuthRoutes(string $method, array $pathParts): void
@@ -155,6 +334,30 @@ function handleAuthRoutes(string $method, array $pathParts): void
         case 'me':
             if ($method === 'GET') {
                 handleGetMe();
+            } else {
+                jsonError('Method not allowed', 405);
+            }
+            break;
+
+        case 'lookup-student':
+            if ($method === 'GET') {
+                handleLookupStudent();
+            } else {
+                jsonError('Method not allowed', 405);
+            }
+            break;
+
+        case 'profile':
+            if ($method === 'PUT') {
+                handleUpdateProfile();
+            } else {
+                jsonError('Method not allowed', 405);
+            }
+            break;
+
+        case 'transition-to-alumni':
+            if ($method === 'POST') {
+                handleTransitionToAlumni();
             } else {
                 jsonError('Method not allowed', 405);
             }

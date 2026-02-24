@@ -65,6 +65,9 @@ export const api = {
     signup: (data: any) => apiClient.post('/auth/signup', data),
     login: (data: any) => apiClient.post('/auth/login', data),
     getCurrentUser: () => apiClient.get('/auth/me'),
+    lookupStudent: (collegeEmail: string) => apiClient.get(`/auth/lookup-student?collegeEmail=${encodeURIComponent(collegeEmail)}`),
+    updateProfile: (data: any) => apiClient.put('/auth/profile', data),
+    transitionToAlumni: (data: { newEmail: string; company: string; role: string }) => apiClient.post('/auth/transition-to-alumni', data),
   },
 
   // Drives endpoints

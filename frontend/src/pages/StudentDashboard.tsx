@@ -5,6 +5,7 @@ import AlumniCard from "@/components/cards/AlumniCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -59,6 +60,12 @@ import {
   GraduationCap,
   Settings,
   UserCircle,
+  Linkedin,
+  Github,
+  Phone,
+  MapPin,
+  BookOpen,
+  Save,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -84,6 +91,24 @@ const StudentDashboard = () => {
   // Transition to Alumni State
   const [showTransitionModal, setShowTransitionModal] = useState(false);
 
+  // Profile Edit State
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    department: '',
+    graduationYear: '',
+    rollNumber: '',
+    phone: '',
+    cgpa: '',
+    semester: '',
+    linkedinUrl: '',
+    githubUrl: '',
+    skills: '',
+    bio: '',
+    address: '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
   // Drives State
   const [drives, setDrives] = useState<any[]>([]);
   const [selectedDrive, setSelectedDrive] = useState<any>(null);
@@ -96,7 +121,47 @@ const StudentDashboard = () => {
     examDate: "",
     validityPeriod: ""
   });
-  const { userData, user } = useAuth();
+  const { userData, user, refreshUserData } = useAuth();
+
+  // Initialise profile form from userData when it loads
+  useEffect(() => {
+    if (userData && !profileLoaded) {
+      setProfileForm(prev => ({
+        ...prev,
+        name: (userData as any).name || '',
+        department: (userData as any).department || '',
+        graduationYear: (userData as any).graduationYear || '',
+        rollNumber: (userData as any).rollNumber || '',
+        phone: (userData as any).phone || '',
+        cgpa: (userData as any).cgpa || '',
+        semester: (userData as any).semester || '',
+        linkedinUrl: (userData as any).linkedinUrl || '',
+        githubUrl: (userData as any).githubUrl || '',
+        skills: (userData as any).skills || '',
+        bio: (userData as any).bio || '',
+        address: (userData as any).address || '',
+      }));
+      // Load saved profile photo from Firestore
+      if ((userData as any).profilePhotoUrl) {
+        setProfileImage((userData as any).profilePhotoUrl);
+      }
+      setProfileLoaded(true);
+    }
+  }, [userData, profileLoaded]);
+
+  // Handle profile form save
+  const handleProfileSave = async () => {
+    setSavingProfile(true);
+    try {
+      await api.auth.updateProfile(profileForm);
+      toast.success('Profile updated successfully!');
+    } catch (error: any) {
+      console.error('Profile update error:', error);
+      toast.error(error.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   // Placement Stats Filter State
   const [selectedYear, setSelectedYear] = useState("All Years");
@@ -347,13 +412,22 @@ const StudentDashboard = () => {
       };
       reader.readAsDataURL(file);
 
-      // Upload to Firebase Storage
+      // Upload to Cloudinary
       try {
         toast.info("Uploading profile picture...");
         const response = await api.upload.uploadProfilePhoto(file);
         if (response.data?.file?.url) {
-          toast.success("Profile picture uploaded!");
-          setProfileImage(response.data.file.url);
+          const photoUrl = response.data.file.url;
+          setProfileImage(photoUrl);
+
+          // Save the Cloudinary URL to Firestore so it persists across logins
+          try {
+            await api.auth.updateProfile({ profilePhotoUrl: photoUrl });
+            toast.success("Profile picture uploaded & saved!");
+          } catch (saveErr) {
+            console.error("Failed to save photo URL to profile:", saveErr);
+            toast.success("Photo uploaded but failed to save to profile.");
+          }
         }
       } catch (error: any) {
         console.error("Upload error:", error);
@@ -456,40 +530,40 @@ const StudentDashboard = () => {
                         />
                       ) : (
                         <span className="text-2xl font-bold text-primary">
-                          AM
+                          {(userData as any)?.name ? (userData as any).name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'ST'}
                         </span>
                       )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg text-foreground">
-                        Arjun Malhotra
+                        {(userData as any)?.name || "Update Profile"}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        Roll No: CE2024001
+                        Roll No: {(userData as any)?.rollNumber || "N/A"}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Computer Engineering
+                        {(userData as any)?.department || "Update Profile"}
                       </p>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center py-2 border-b border-border">
                       <span className="text-sm text-muted-foreground">CGPA</span>
-                      <span className="font-medium text-foreground">8.9</span>
+                      <span className="font-medium text-foreground">{(userData as any)?.cgpa || "N/A"}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-border">
                       <span className="text-sm text-muted-foreground">Batch</span>
-                      <span className="font-medium text-foreground">2024</span>
+                      <span className="font-medium text-foreground">{(userData as any)?.graduationYear || "N/A"}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-border">
                       <span className="text-sm text-muted-foreground">
                         Status
                       </span>
-                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-success/10 text-success">
-                        Placed
+                      <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        Student
                       </span>
                     </div>
-                    <Button className="w-full mt-2" variant="outline">
+                    <Button className="w-full mt-2" variant="outline" onClick={() => setActiveTab("settings")}>
                       View Full Profile
                     </Button>
                   </div>
@@ -1134,10 +1208,189 @@ const StudentDashboard = () => {
                 Settings
               </h2>
               <p className="text-sm text-muted-foreground">
-                Manage your account and preferences
+                Manage your profile, account and preferences
               </p>
             </div>
 
+            {/* Personal Information */}
+            <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
+              <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <UserCircle className="h-4 w-4" /> Personal Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Full Name</Label>
+                  <Input
+                    id="edit-name"
+                    placeholder="Your full name"
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-phone">Phone Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-phone"
+                      placeholder="+91 9876543210"
+                      value={profileForm.phone}
+                      onChange={(e) => setProfileForm(prev => ({ ...prev, phone: e.target.value }))}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-department">Department</Label>
+                  <Select
+                    value={profileForm.department}
+                    onValueChange={(val) => setProfileForm(prev => ({ ...prev, department: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Computer Engineering">Computer Engineering</SelectItem>
+                      <SelectItem value="Information Technology">Information Technology</SelectItem>
+                      <SelectItem value="Electronics & Telecommunication">Electronics & Telecommunication</SelectItem>
+                      <SelectItem value="Mechanical Engineering">Mechanical Engineering</SelectItem>
+                      <SelectItem value="Civil Engineering">Civil Engineering</SelectItem>
+                      <SelectItem value="Electrical Engineering">Electrical Engineering</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-gradYear">Graduation Year</Label>
+                  <Input
+                    id="edit-gradYear"
+                    placeholder="e.g., 2027"
+                    value={profileForm.graduationYear}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, graduationYear: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-roll">Roll Number</Label>
+                  <Input
+                    id="edit-roll"
+                    placeholder="e.g., CE2024001"
+                    value={profileForm.rollNumber}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, rollNumber: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-cgpa">CGPA</Label>
+                  <Input
+                    id="edit-cgpa"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="10"
+                    placeholder="e.g., 8.9"
+                    value={profileForm.cgpa}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, cgpa: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-semester">Current Semester</Label>
+                  <Select
+                    value={profileForm.semester}
+                    onValueChange={(val) => setProfileForm(prev => ({ ...prev, semester: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select semester" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1,2,3,4,5,6,7,8].map((s) => (
+                        <SelectItem key={s} value={String(s)}>Semester {s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-address">Address</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-address"
+                      placeholder="City, State"
+                      value={profileForm.address}
+                      onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-bio">Bio</Label>
+                  <Textarea
+                    id="edit-bio"
+                    placeholder="Tell us a bit about yourself..."
+                    value={profileForm.bio}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, bio: e.target.value }))}
+                    rows={3}
+                    className="resize-none"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-skills">Skills</Label>
+                  <Input
+                    id="edit-skills"
+                    placeholder="e.g., React, Node.js, Python, ML (comma separated)"
+                    value={profileForm.skills}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, skills: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Separate skills with commas</p>
+                </div>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-border">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" /> Social Links
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-linkedin">LinkedIn URL</Label>
+                    <div className="relative">
+                      <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="edit-linkedin"
+                        placeholder="https://linkedin.com/in/yourprofile"
+                        value={profileForm.linkedinUrl}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, linkedinUrl: e.target.value }))}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-github">GitHub URL</Label>
+                    <div className="relative">
+                      <Github className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="edit-github"
+                        placeholder="https://github.com/yourusername"
+                        value={profileForm.githubUrl}
+                        onChange={(e) => setProfileForm(prev => ({ ...prev, githubUrl: e.target.value }))}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <Button onClick={handleProfileSave} disabled={savingProfile} className="gap-2">
+                  {savingProfile ? (
+                    <><span className="animate-spin">⏳</span> Saving...</>
+                  ) : (
+                    <><Save className="h-4 w-4" /> Save Profile</>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Profile Picture */}
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <UserCircle className="h-4 w-4" /> Profile Picture
@@ -1152,7 +1405,7 @@ const StudentDashboard = () => {
                     />
                   ) : (
                     <span className="text-2xl font-bold text-muted-foreground">
-                      AM
+                      {profileForm.name ? profileForm.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'ST'}
                     </span>
                   )}
                 </div>
@@ -1180,6 +1433,7 @@ const StudentDashboard = () => {
               </div>
             </div>
 
+            {/* Account Security */}
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Lock className="h-4 w-4" /> Account Security
@@ -1205,6 +1459,7 @@ const StudentDashboard = () => {
               </div>
             </div>
 
+            {/* Notifications */}
             <div className="bg-card rounded-lg border border-border p-6 shadow-sm">
               <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Bell className="h-4 w-4" /> Notifications

@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { auth, db } from "@/lib/firebase";
 import { EmailAuthProvider, reauthenticateWithCredential, updateEmail } from "firebase/auth";
-import { doc, updateDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { api } from "@/services/api.service";
 
 interface TransitionToAlumniModalProps {
   isOpen: boolean;
@@ -40,27 +41,15 @@ const TransitionToAlumniModal: React.FC<TransitionToAlumniModalProps> = ({ isOpe
       const credential = EmailAuthProvider.credential(currentEmail, password);
       await reauthenticateWithCredential(user, credential);
 
-      // 2. Update Auth Email
-      await updateEmail(user, personalEmail);
-
-      // 3. Update Firestore User Role
-      const userRef = doc(db, "Users", uid);
-      await updateDoc(userRef, {
-        email: personalEmail,
-        role: "alumni",
+      // 2. Call backend endpoint to handle email change and data transfer securely
+      // This bypasses the Firebase "operation-not-allowed" error for frontend email changes
+      await api.auth.transitionToAlumni({
+        newEmail: personalEmail,
+        company: company || "",
+        role: role || ""
       });
 
-      // 4. Create Alumni Profile
-      const alumniRef = doc(db, "alumni_profiles", uid);
-      await setDoc(alumniRef, {
-        userId: uid,
-        company: company || "Not specified",
-        role: role || "Not specified",
-        isPublic: true,
-        createdAt: new Date().toISOString()
-      }, { merge: true });
-
-      toast.success("Successfully transitioned to Alumni account! Please log in again using your new email.");
+      toast.success("Successfully transitioned to Alumni! Your student data has been transferred. Please log in again with your new email.");
       
       // Auto-refresh to force new auth state/roles to load
       setTimeout(() => {
@@ -87,7 +76,7 @@ const TransitionToAlumniModal: React.FC<TransitionToAlumniModalProps> = ({ isOpe
         <DialogHeader>
           <DialogTitle>Transition to Alumni</DialogTitle>
           <DialogDescription>
-            Update your account with a personal email to maintain access after graduation. Your past data will be preserved.
+            Update your account with a personal email to maintain access after graduation. Your student data (name, department, batch, roll number) will be automatically transferred to your new alumni profile.
           </DialogDescription>
         </DialogHeader>
 
@@ -102,6 +91,7 @@ const TransitionToAlumniModal: React.FC<TransitionToAlumniModalProps> = ({ isOpe
               onChange={(e) => setPersonalEmail(e.target.value)}
               required
             />
+            <p className="text-xs text-muted-foreground">This will replace your college email as the login email.</p>
           </div>
 
           <div className="space-y-2">
@@ -139,6 +129,12 @@ const TransitionToAlumniModal: React.FC<TransitionToAlumniModalProps> = ({ isOpe
                 />
               </div>
             </div>
+          </div>
+
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-3 mt-2">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              ℹ️ Your student data (name, department, graduation year, roll number) will be automatically copied to your new alumni profile.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
