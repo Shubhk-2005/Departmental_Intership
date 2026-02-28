@@ -1283,103 +1283,51 @@ const IMSReportsTab = () => {
 const AlumniTab = () => {
   const { data: alumniDirectory = [], isLoading: alumniLoading } = useAlumni();
   const [alumniSearchQuery, setAlumniSearchQuery] = useState("");
+  const [selectedDomain, setSelectedDomain] = useState("All Domains");
 
-  const filteredAlumni = alumniDirectory.filter(
-    (alumni) =>
+  const uniqueDomains = useMemo(() => {
+    const domains = new Set<string>();
+    alumniDirectory.forEach((a: any) => {
+      if (a.workDomain) domains.add(a.workDomain);
+    });
+    return Array.from(domains).sort();
+  }, [alumniDirectory]);
+
+  const filteredAlumni = alumniDirectory.filter((alumni) => {
+    const matchesSearch =
       alumni.name.toLowerCase().includes(alumniSearchQuery.toLowerCase()) ||
       alumni.company.toLowerCase().includes(alumniSearchQuery.toLowerCase()) ||
-      alumni.role.toLowerCase().includes(alumniSearchQuery.toLowerCase())
-  );
-
-  const [isBackfilling, setIsBackfilling] = useState(false);
-
-  const handleBackfillDomains = async () => {
-    if (!confirm("This will assign random domains to all alumni who don't have one. Continue?")) return;
+      alumni.role.toLowerCase().includes(alumniSearchQuery.toLowerCase());
+      
+    const matchesDomain = selectedDomain === "All Domains" || alumni.workDomain === selectedDomain;
     
-    setIsBackfilling(true);
-    const domains = [
-      "Software Engineering",
-      "Data Science", 
-      "Product Management",
-      "Cyber Security",
-      "AI/ML",
-      "Cloud Computing",
-      "DevOps",
-      "UI/UX Design",
-      "Finance",
-      "Consulting"
-    ];
-
-    try {
-      let count = 0;
-      // We process in chunks to avoid batch limits (500 ops)
-      // Since we don't know the exact collection name the API uses, 
-      // we'll try to update via the 'Users' collection as seen in signup.
-      
-      const batch = writeBatch(db);
-      let batchCount = 0;
-
-      // Filter alumni needing update from the directory
-      const alumniToUpdate = alumniDirectory.filter((a: any) => !a.workDomain);
-      
-      if (alumniToUpdate.length === 0) {
-        toast.info("No alumni found needing domain backfill.");
-        setIsBackfilling(false);
-        return;
-      }
-
-      for (const alum of alumniToUpdate) {
-        if (!alum.id) continue;
-        
-        const randomDomain = domains[Math.floor(Math.random() * domains.length)];
-        const alumniRef = doc(db, "Users", alum.id); 
-        
-        batch.update(alumniRef, { workDomain: randomDomain });
-        batchCount++;
-        count++;
-
-        if (batchCount >= 400) {
-            await batch.commit();
-            batchCount = 0;
-            // batch = writeBatch(db); // creating new batch not straightforward in loop without reassignment
-        }
-      }
-
-      if (batchCount > 0) {
-        await batch.commit();
-      }
-
-      toast.success(`Successfully backfilled ${count} alumni with random domains.`);
-      // Ideally trigger a refresh of alumniDirectory here, but useAlumni should handle it if it listens to real-time, 
-      // otherwise a window reload might be needed or invalidation.
-      setTimeout(() => window.location.reload(), 1500);
-
-    } catch (error) {
-      console.error("Backfill error:", error);
-      toast.error("Failed to backfill domains.");
-    } finally {
-      setIsBackfilling(false);
-    }
-  };
+    return matchesSearch && matchesDomain;
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h2 className="text-xl font-semibold text-foreground">Alumni Directory</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
             placeholder="Search alumni..."
             value={alumniSearchQuery}
             onChange={(e) => setAlumniSearchQuery(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:w-[250px]"
           />
-          <Button 
-            variant="outline" 
-            onClick={handleBackfillDomains}
-            disabled={isBackfilling}
-          >
-            {isBackfilling ? "Backfilling..." : "Backfill Domains"}
-          </Button>
+          <Select value={selectedDomain} onValueChange={setSelectedDomain}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by domain" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All Domains">All Domains</SelectItem>
+              {uniqueDomains.map((domain) => (
+                <SelectItem key={domain} value={domain}>
+                  {domain}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -1387,7 +1335,7 @@ const AlumniTab = () => {
         <div className="text-center py-10">Loading alumni data...</div>
       ) : filteredAlumni.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border-2 border-dashed border-muted">
-          No alumni found matching your search.
+          No alumni found matching your criteria.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

@@ -58,7 +58,7 @@ const TransitionToAlumniModal: React.FC<TransitionToAlumniModalProps> = ({ isOpe
 
     } catch (error: any) {
       console.error("Transition error:", error);
-      if (error.code === 'auth/wrong-password') {
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         toast.error("Incorrect password. Please try again.");
       } else if (error.code === 'auth/email-already-in-use') {
         toast.error("That email is already registered to another account.");
